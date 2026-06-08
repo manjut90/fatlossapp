@@ -1,5 +1,6 @@
 // HomeScreen.tsx
 
+import { MissionCard } from '../components/MissionCard';
 import { useHealth } from '../context/HealthContext';
 import { getWeatherTemp } from '../services/weather';
 
@@ -397,6 +398,9 @@ export default function HomeScreen() {
               <View style={{ width: 28 }} />
             </View>
           </View>
+
+{/* DAILY MISSION */}
+<MissionCard />
 
           {/* ══════════════════════════════
               TODAY'S CHECK-INS
