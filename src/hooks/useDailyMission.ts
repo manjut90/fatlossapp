@@ -90,7 +90,8 @@ export function useDailyMission(): UseDailyMissionResult {
     if (mission.completed_missions.includes(index)) return;
 
     const updatedCompleted = [...mission.completed_missions, index];
-    const earnedXp = mission.missions[index]?.xp ?? 50;
+const earnedXp = mission.missions[index]?.xp ?? 50;
+
 
     // Optimistic update — UI responds immediately
     setMission(prev =>
@@ -102,12 +103,11 @@ export function useDailyMission(): UseDailyMissionResult {
         // Update completed_missions in daily_missions row
         // Skip DB write for fallback missions (no real row exists)
         mission.id !== 'fallback'
-          ? supabase
-              .from('daily_missions')
-              .update({ completed_missions: updatedCompleted })
-              .eq('id', mission.id)
-              .eq('user_id', user.id)
-          : Promise.resolve(),
+  ? supabase
+      .from('daily_missions')
+      .update({ completed_missions: updatedCompleted })
+      .eq('id', mission.id)
+  : Promise.resolve(),
 
         // Award XP — uses confirmed schema: { user_id, xp, reason }
         // src/services/xp.ts → awardCheckInXp(amount, reason, user_id)
