@@ -69,19 +69,14 @@ export async function scheduleDailyReminder() {
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title:
-        'Daily Check-In 🔥',
-
-      body:
-        'Track your progress today and protect your streak.',
-
-      sound: true,
-    },
+  title: 'LFGO TEST 🚀',
+  body: 'If you see this, notifications are working.',
+  sound: true,
+},
 
     trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: 8,
-      minute: 0,
-    },
+  type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+  seconds: 30,
+},
   });
 }
