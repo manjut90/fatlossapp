@@ -1,4 +1,10 @@
 
+import { useEffect } from 'react';
+
+import {
+  registerForPushNotificationsAsync,
+  scheduleDailyReminder,
+} from './src/utils/notifications';
 import React from 'react';
 import 'react-native-reanimated';
 
@@ -34,6 +40,29 @@ import {
   ThemeProvider,
 } from './src/context/ThemeProvider';
 
+function NotificationInitializer() {
+  useEffect(() => {
+    async function setup() {
+      try {
+        await registerForPushNotificationsAsync();
+        await scheduleDailyReminder();
+
+        console.log(
+          '✅ Daily reminder scheduled'
+        );
+      } catch (err) {
+        console.error(
+          '❌ Notification setup failed:',
+          err
+        );
+      }
+    }
+
+    setup();
+  }, []);
+
+  return null;
+}
 export default function App() {
   return (
     <GestureHandlerRootView
