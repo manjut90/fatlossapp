@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import {
   registerForPushNotificationsAsync,
   scheduleDailyReminder,
+  scheduleNoonReminder,
 } from './src/utils/notifications';
 import React from 'react';
 import 'react-native-reanimated';
@@ -42,14 +43,14 @@ import {
 
 function NotificationInitializer() {
   useEffect(() => {
+    console.log('🚀 NotificationInitializer mounted');
+
     async function setup() {
       try {
         await registerForPushNotificationsAsync();
         await scheduleDailyReminder();
-
-        console.log(
-          '✅ Daily reminder scheduled'
-        );
+        await scheduleNoonReminder();
+        console.log('✅ Daily reminder scheduled');
       } catch (err) {
         console.error(
           '❌ Notification setup failed:',
@@ -72,8 +73,9 @@ export default function App() {
         <OnboardingProvider>
           <HealthProvider>
             <ThemeProvider>
-              <Navigation />
-            </ThemeProvider>
+  <NotificationInitializer />
+  <Navigation />
+</ThemeProvider>
           </HealthProvider>
         </OnboardingProvider>
       </AuthProvider>

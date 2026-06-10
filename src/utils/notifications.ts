@@ -13,7 +13,16 @@ Notifications.setNotificationHandler({
   }),
 });
 
+console.log('DEVICE IS DEVICE:', Device.isDevice);
 export async function registerForPushNotificationsAsync() {
+  
+  const permissions =
+  await Notifications.getPermissionsAsync();
+
+console.log(
+  'PERMISSIONS:',
+  JSON.stringify(permissions, null, 2)
+);
   if (Device.isDevice) {
     const {
       status: existingStatus,
@@ -69,14 +78,38 @@ export async function scheduleDailyReminder() {
 
   await Notifications.scheduleNotificationAsync({
     content: {
-  title: 'LFGO TEST 🚀',
-  body: 'If you see this, notifications are working.',
-  sound: true,
-},
+      title: 'Your mission is ready 🔥',
+      body: 'Open LFGO and complete today’s mission.',
+      sound: true,
+    },
 
     trigger: {
-  type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-  seconds: 30,
+  type: Notifications.SchedulableTriggerInputTypes.DAILY,
+  hour: 7,
+  minute: 0,
 },
   });
+
+  console.log(
+    '✅ 7AM mission reminder scheduled'
+  );
+}
+export async function scheduleNoonReminder() {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Still time today 💪',
+      body: 'Your daily mission is waiting.',
+      sound: true,
+    },
+
+    trigger: {
+  type: Notifications.SchedulableTriggerInputTypes.DAILY,
+  hour: 12,
+  minute: 0,
+},
+  });
+
+  console.log(
+    '✅ Noon reminder scheduled'
+  );
 }
