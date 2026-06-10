@@ -38,13 +38,14 @@ export function AuthProvider({
         setProfileLoading(true);
 
         const {
-          data,
-          error,
-        } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
+  data,
+  error,
+} = await supabase
+  .from('profiles')
+  .select('*')
+  .eq('id', userId)
+  .single();
+
 
         if (error) {
           // If no profile is found, create one
@@ -73,10 +74,15 @@ export function AuthProvider({
           false
         );
       } catch (e) {
-        setProfileLoading(
-          false
-        );
-      }
+  console.error(
+    'FETCH PROFILE FAILED:',
+    e
+  );
+
+  setProfileLoading(
+    false
+  );
+}
     };
 
   /* REFRESH PROFILE */
@@ -166,7 +172,7 @@ export function AuthProvider({
           if (!mounted.current) return;
 
           const currentUser =
-            session?.user;
+  session?.user;
 
           setUser(
             currentUser || null
@@ -212,7 +218,7 @@ export function AuthProvider({
           if (!mounted.current) return;
 
           const currentUser =
-            session?.user;
+  session?.user;
 
           setUser(
             currentUser || null
