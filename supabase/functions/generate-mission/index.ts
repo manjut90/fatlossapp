@@ -72,10 +72,14 @@ serve(async (req) => {
 
     // Read user profile — confirmed table: profiles
     const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name, goal, activity_level, training_experience")
-      .eq("id", user_id)
-      .single();
+  .from("profiles")
+  .select("full_name, goal, goals, activity_level, training_experience")
+  .eq("id", user_id)
+  .single();
+  const userGoal =
+  profile?.goal ||
+  profile?.goals?.[0] ||
+  "general fitness";
 
     // Read last 48h activity + sleep for context
     const since = new Date(date);
@@ -91,7 +95,7 @@ serve(async (req) => {
     const prompt = `You are a personal health coach. Generate exactly 2 daily missions.
 
 User: ${profile?.full_name ?? "User"}
-Goal: ${profile?.goal ?? "general fitness"}
+Goal: ${userGoal}
 Activity level: ${profile?.activity_level ?? "moderate"}
 Experience: ${profile?.training_experience ?? "beginner"}
 Recent activity (48h): ${JSON.stringify(activity ?? [])}
