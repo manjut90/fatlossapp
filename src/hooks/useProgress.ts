@@ -54,13 +54,20 @@ export default function useProgress() {
   const fetchProgress =
     async () => {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+
         const {
           data,
         } = await supabase
           .from('user_progress')
           .select('*')
+          .eq('user_id', user.id)
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (data) {
           setXp(data.xp || 0);
