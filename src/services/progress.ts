@@ -35,7 +35,7 @@ export async function addXp(
       amount;
 
     const level =
-      Math.floor(newXp / 100) + 1;
+      Math.floor(newXp / 500) + 1;
 
     await supabase
       .from('user_progress')
