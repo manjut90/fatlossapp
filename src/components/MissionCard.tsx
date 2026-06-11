@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { Zap, Droplets, Utensils, Footprints, CheckCircle } from 'lucide-react-native';
 import { useDailyMission, Mission } from '../hooks/useDailyMission';
@@ -15,7 +16,7 @@ const CATEGORY_CONFIG = {
   nutrition: { icon: Utensils,   color: '#FF8FA3', label: 'NUTRITION' },
 };
 
-function CategoryPill({ category }: { category: string }) {
+function CategoryPill({ category }: { category: 'movement' | 'hydration' | 'nutrition' }) {
   const config = CATEGORY_CONFIG[category] ?? CATEGORY_CONFIG.movement;
   const Icon = config.icon;
   return (
@@ -37,8 +38,68 @@ function MissionRow({
   completed: boolean;
   onComplete: () => void;
 }) {
+  // Animation values
+  const xpAnimation = useRef(new Animated.Value(0)).current;
+  const rowAnimation = useRef(new Animated.Value(0)).current;
+  const prevCompletedRef = useRef<boolean>();
+
+  useEffect(() => {
+    const prevCompleted = prevCompletedRef.current;
+    if (prevCompleted === false && completed === true) {
+      Animated.parallel([
+        // Row fade and scale animation
+        Animated.timing(rowAnimation, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        // Floating XP text animation
+        Animated.timing(xpAnimation, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+    prevCompletedRef.current = completed;
+  }, [completed, rowAnimation, xpAnimation]);
+
+  // Interpolate styles from animation values
+  const rowStyle = {
+    opacity: rowAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0.7],
+    }),
+    transform: [
+      {
+        scale: rowAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 0.98],
+        }),
+      },
+    ],
+  };
+
+  const xpStyle = {
+    opacity: xpAnimation.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0, 1, 0],
+    }),
+    transform: [
+      {
+        translateY: xpAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -60],
+        }),
+      },
+    ],
+  };
+
   return (
-    <View style={[styles.missionRow, completed && styles.missionRowDone]}>
+    <Animated.View style={[styles.missionRow, completed && styles.missionRowDone, rowStyle]}>
+      <Animated.Text style={[styles.xpFloating, xpStyle]}>
+        +{mission.xp} XP
+      </Animated.Text>
       <View style={styles.missionLeft}>
         <View style={styles.missionMeta}>
           <CategoryPill category={mission.category} />
@@ -64,7 +125,7 @@ function MissionRow({
           : <Text style={styles.doneBtnText}>Done</Text>
         }
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -202,6 +263,15 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: '#F7C873',
+  },
+  xpFloating: {
+    position: 'absolute',
+    top: 10,
+    right: 20,
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#F7C873',
+    zIndex: 1,
   },
   missionTitle: {
     fontSize: 15,
