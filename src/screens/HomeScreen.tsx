@@ -500,15 +500,14 @@ const xpProgress =
               {/* Level + XP */}
               <View style={styles.levelSection}>
                 <Text style={styles.levelText}>LEVEL {healthData.level || 1}</Text>
+                <Text style={styles.xpText}>{xpInCurrentLevel} / 500 XP</Text>
                 <View style={styles.levelTrack}>
                   <LinearGradient
                     colors={['#8B7CFF', '#FF8FA3']}
                     style={[styles.levelFill, { width: `${xpProgress}%` }]}
                   />
                 </View>
-                <Text style={styles.xpText}>
-  +{healthData.xp || 0} XP today • {healthData.totalXp || 0} Total XP
-</Text>
+                <Text style={styles.xpText}>{500 - xpInCurrentLevel} XP to Level {(healthData.level || 1) + 1}</Text>
               </View>
             </View>
 
