@@ -38,14 +38,36 @@ export async function awardCheckInXp(
             new Date().toISOString(),
         });
 
-    if (error) {
-      throw error;
-    }
+   if (error) {
+  throw error;
+}
 
-    return {
-      success: true,
-      xp: amount,
-    };
+const { data: progress } =
+  await supabase
+    .from('user_progress')
+    .select('xp')
+    .eq('user_id', resolvedUserId)
+    .single();
+
+const currentXp =
+  progress?.xp || 0;
+
+const { error: xpError } =
+  await supabase
+    .from('user_progress')
+    .update({
+      xp: currentXp + amount,
+    })
+    .eq('user_id', resolvedUserId);
+
+if (xpError) {
+  throw xpError;
+}
+
+return {
+  success: true,
+  xp: amount,
+};
   } catch (err) {
     console.log(err);
 

@@ -318,8 +318,11 @@ export default function HomeScreen() {
   };
 
   // XP progress toward next level (1000 XP per level)
-  const xpInCurrentLevel = (healthData.xp || 0) % 1000;
-  const xpProgress = xpInCurrentLevel / 10;
+  const xpInCurrentLevel =
+  (healthData.totalXp || 0) % 500;
+
+const xpProgress =
+  (xpInCurrentLevel / 500) * 100;
 
   // ── OPTIMIZE TODAY — only shows when off track ──
   const getOptimizeItems = () => {
@@ -503,7 +506,9 @@ export default function HomeScreen() {
                     style={[styles.levelFill, { width: `${xpProgress}%` }]}
                   />
                 </View>
-                <Text style={styles.xpText}>+{healthData.xp || 0} XP earned today</Text>
+                <Text style={styles.xpText}>
+  +{healthData.xp || 0} XP today • {healthData.totalXp || 0} Total XP
+</Text>
               </View>
             </View>
 

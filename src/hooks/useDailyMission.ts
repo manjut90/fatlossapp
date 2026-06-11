@@ -84,13 +84,30 @@ export function useDailyMission(): UseDailyMissionResult {
   }
 
   const completeMission = useCallback(async (index: number) => {
-    if (!mission || !user?.id) return;
+       if (!mission || !user?.id) return;
+const { data: latestMission } =
+  await supabase
+    .from('daily_missions')
+    .select('completed_missions')
+    .eq('id', mission.id)
+    .single();
 
+if (
+  latestMission?.completed_missions?.includes(index)
+) {
+  console.log(
+    'Mission already completed. Skipping XP.'
+  );
+  return;
+}
     // Guard: idempotent — ignore if already completed
     if (mission.completed_missions.includes(index)) return;
 
     const updatedCompleted = [...mission.completed_missions, index];
-const earnedXp = mission.missions[index]?.xp ?? 50;
+const allCompleted =
+  updatedCompleted.length ===
+  mission.missions.length;
+    const earnedXp = mission.missions[index]?.xp ?? 50;
 
 
     // Optimistic update — UI responds immediately
@@ -99,26 +116,29 @@ const earnedXp = mission.missions[index]?.xp ?? 50;
     );
 
     try {
-      await Promise.all([
-        // Update completed_missions in daily_missions row
-        // Skip DB write for fallback missions (no real row exists)
-        mission.id !== 'fallback'
-  ? supabase
-      .from('daily_missions')
-      .update({ completed_missions: updatedCompleted })
-      .eq('id', mission.id)
-  : Promise.resolve(),
+        
+  await Promise.all([
+    mission.id !== 'fallback'
+      ? supabase
+          .from('daily_missions')
+          .update({
+            completed_missions: updatedCompleted,
+          })
+          .eq('id', mission.id)
+      : Promise.resolve(),
 
-        // Award XP — uses confirmed schema: { user_id, xp, reason }
-        // src/services/xp.ts → awardCheckInXp(amount, reason, user_id)
-        awardCheckInXp(earnedXp, 'Mission Complete', user.id),
+    awardCheckInXp(
+      earnedXp,
+      'Mission Complete',
+      user.id
+    ),
+  ]);
 
-        // Update streak — src/services/streaks.ts → updateDailyStreak(user_id)
-        updateDailyStreak(user.id),
-      ]);
+  if (allCompleted) {
+    await updateDailyStreak(user.id);
+  }
 
-      // Refresh HealthContext so HomeScreen XP + streak display updates
-      await refreshHealthData();
+  await refreshHealthData();
 
     } catch (err) {
       console.error('[useDailyMission] completeMission failed:', err);

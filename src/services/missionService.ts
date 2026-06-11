@@ -9,7 +9,7 @@ export async function hasCompletedTodayMission(
   const { data, error } =
     await supabase
       .from('daily_missions')
-      .select('completed_missions')
+      .select('completed_missions, missions')
       .eq('user_id', userId)
       .eq('date', today)
       .single();
@@ -18,12 +18,20 @@ export async function hasCompletedTodayMission(
     return false;
   }
 
-  return (
-    Array.isArray(
-      data.completed_missions
-    ) &&
-    data.completed_missions.length > 0
-  );
+  const completed =
+  Array.isArray(data.completed_missions)
+    ? data.completed_missions
+    : [];
+
+const totalMissions =
+  Array.isArray(data.missions)
+    ? data.missions.length
+    : 0;
+
+return (
+  totalMissions > 0 &&
+  completed.length === totalMissions
+);
 }
 
 export async function getTodayMission(

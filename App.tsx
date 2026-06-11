@@ -1,11 +1,11 @@
 
 import { useEffect } from 'react';
 
-import {
-  registerForPushNotificationsAsync,
-  scheduleDailyReminder,
-  scheduleNoonReminder,
-} from './src/utils/notifications';
+//import {
+  //registerForPushNotificationsAsync,
+  //scheduleDailyReminder,
+  //scheduleNoonReminder,
+//} from './src/utils/notifications';
 import React from 'react';
 import 'react-native-reanimated';
 
@@ -41,6 +41,7 @@ import {
   ThemeProvider,
 } from './src/context/ThemeProvider';
 
+/*
 function NotificationInitializer() {
   useEffect(() => {
     console.log('🚀 NotificationInitializer mounted');
@@ -64,6 +65,7 @@ function NotificationInitializer() {
 
   return null;
 }
+  */
 export default function App() {
   return (
     <GestureHandlerRootView
@@ -73,7 +75,6 @@ export default function App() {
         <OnboardingProvider>
           <HealthProvider>
             <ThemeProvider>
-  <NotificationInitializer />
   <Navigation />
 </ThemeProvider>
           </HealthProvider>

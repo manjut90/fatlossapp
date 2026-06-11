@@ -37,6 +37,7 @@ const DEFAULT_HEALTH_DATA = {
   todayCaloriesBurned: 0,
   dailyScore: 0,
   xp: 0,
+  totalXp: 0,
   level: 1,
   streak: 0,
   timeline: [],
@@ -97,7 +98,7 @@ export function HealthProvider({ children }: any) {
 
         supabase
           .from('user_progress')
-          .select('streak')
+          .select('streak,xp')
           .eq('user_id', userId)
           .maybeSingle(),
 
@@ -127,6 +128,8 @@ export function HealthProvider({ children }: any) {
 
       // Streak
       const streak = progressResult.data?.streak ?? 0;
+      const totalXp =
+  progressResult.data?.xp ?? 0;
 
       // XP
       const xp = xpResult.data?.reduce((s, r) => s + (Number(r.xp) || 0), 0) ?? 0;
@@ -151,7 +154,8 @@ export function HealthProvider({ children }: any) {
         todayCaloriesBurned: Math.round(todayCaloriesBurned),
         dailyScore,
         xp: Math.round(xp),
-        level: Math.floor(xp / 500) + 1,
+        totalXp: Math.round(totalXp),
+        level: Math.floor(totalXp / 500) + 1,
         streak,
         timeline: [],
       };
