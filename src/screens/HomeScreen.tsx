@@ -49,6 +49,7 @@ import {
 } from 'lucide-react-native';
 
 import { useAuth } from '../context/AuthContext';
+import { LevelUpModal } from '../components/LevelUpModal';
 
 // ── PROGRESS RING component ──
 function ProgressRing({
@@ -101,7 +102,14 @@ export default function HomeScreen() {
   const [greeting, setGreeting] = useState('Hey');
 
   const { profile } = useAuth();
-  const { healthData, refreshHealthData } = useHealth();
+  const {
+    healthData,
+    refreshHealthData,
+    pendingLevelUp,
+    clearPendingLevelUp,
+  } = useHealth();
+
+  console.log('PENDING LEVEL UP', pendingLevelUp);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -675,6 +683,12 @@ export default function HomeScreen() {
 
         </Animated.View>
       </ScrollView>
+      <LevelUpModal
+        visible={!!pendingLevelUp}
+        level={pendingLevelUp?.level ?? 1}
+        title={pendingLevelUp?.title ?? ''}
+        onClose={clearPendingLevelUp}
+      />
     </View>
   );
 }
