@@ -15,6 +15,7 @@ import { awardCheckInXp } from '../services/xp';
 import { updateDailyStreak } from '../services/streaks';
 import { calculateDailyScore } from '../utils/calculateDailyScore';
 import { calculateXP } from '../utils/calculateXP';
+import { getLevelFromXP } from '../constants/levels';
 
 const HealthContext = createContext<any>(null);
 
@@ -46,6 +47,7 @@ const DEFAULT_HEALTH_DATA = {
 export function HealthProvider({ children }: any) {
   const [healthData, setHealthData] = useState(DEFAULT_HEALTH_DATA);
   const [initialized, setInitialized] = useState(false);
+  const [pendingLevelUp, setPendingLevelUp] = useState(null);
 
   // ==========================================
   // LOAD TODAY'S REAL DATA FROM SUPABASE
@@ -127,6 +129,7 @@ export function HealthProvider({ children }: any) {
       const todayCaloriesBurned = activityResult.data?.reduce((s, r) => s + (Number(r.calories_burned) || 0), 0) ?? 0;
 
       // Streak
+      console.log('PROGRESS DEBUG', progressResult);
       const streak = progressResult.data?.streak ?? 0;
       const totalXp = progressResult.data?.xp ?? 0;
 
@@ -142,6 +145,8 @@ export function HealthProvider({ children }: any) {
       });
 
       const levelInfo = getLevelFromXP(totalXp);
+
+
 
       const newHealthData = {
         todayCalories: Math.round(todayCalories),
@@ -160,10 +165,11 @@ export function HealthProvider({ children }: any) {
         streak,
         timeline: [],
       };
+      console.log('NEW HEALTH DATA', newHealthData);
       setHealthData(newHealthData);
     } catch (err) {
-      // silent
-    } finally {
+  console.error('HEALTH CONTEXT ERROR', err);
+} finally {
       setInitialized(true);
     }
   }, []);
@@ -179,6 +185,10 @@ export function HealthProvider({ children }: any) {
 
   const updateHealthData = (updates: any) => {
     setHealthData((prev: any) => ({ ...prev, ...updates }));
+  };
+
+  const clearPendingLevelUp = () => {
+    setPendingLevelUp(null);
   };
 
   // ==========================================
@@ -284,6 +294,8 @@ export function HealthProvider({ children }: any) {
       value={{
         healthData,
         initialized,
+        pendingLevelUp,
+        clearPendingLevelUp,
         updateHealthData,
         addParsedCheckIn,
         resetDailyData,

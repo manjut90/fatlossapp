@@ -3,6 +3,7 @@
 import { MissionCard } from '../components/MissionCard';
 import { useHealth } from '../context/HealthContext';
 import { getWeatherTemp } from '../services/weather';
+import { getLevelFromXP } from '../constants/levels';
 
 import React, {
   useCallback,
@@ -318,11 +319,22 @@ export default function HomeScreen() {
   };
 
   // XP progress toward next level (1000 XP per level)
-  const xpInCurrentLevel =
-  (healthData.totalXp || 0) % 500;
+  const levelInfo = getLevelFromXP(healthData.totalXp || 0);
 
-const xpProgress =
-  (xpInCurrentLevel / 500) * 100;
+  const xpInCurrentLevel =
+    (healthData.totalXp || 0) - levelInfo.currentLevelXp;
+
+  const xpNeededForLevel =
+    levelInfo.nextLevelXp !== null
+      ? levelInfo.nextLevelXp - levelInfo.currentLevelXp
+      : 0;
+
+  const xpRemaining =
+    levelInfo.nextLevelXp !== null
+      ? levelInfo.nextLevelXp - (healthData.totalXp || 0)
+      : 0;
+
+  const xpProgress = levelInfo.progressPercent;
 
   // ── OPTIMIZE TODAY — only shows when off track ──
   const getOptimizeItems = () => {
@@ -357,6 +369,12 @@ const xpProgress =
     if (pct >= 1) return 'Hit ✓';
     return 'On track';
   };
+
+  console.log('XP DEBUG', {
+    xp: healthData?.xp,
+    totalXp: healthData?.totalXp,
+    level: healthData?.level,
+  });
 
   return (
     <View style={styles.container}>
@@ -500,14 +518,14 @@ const xpProgress =
               {/* Level + XP */}
               <View style={styles.levelSection}>
                 <Text style={styles.levelText}>LEVEL {healthData.level || 1}</Text>
-                <Text style={styles.xpText}>{xpInCurrentLevel} / 500 XP</Text>
+                <Text style={styles.xpText}>{xpInCurrentLevel} / {xpNeededForLevel} XP</Text>
                 <View style={styles.levelTrack}>
                   <LinearGradient
                     colors={['#8B7CFF', '#FF8FA3']}
                     style={[styles.levelFill, { width: `${xpProgress}%` }]}
                   />
                 </View>
-                <Text style={styles.xpText}>{500 - xpInCurrentLevel} XP to Level {(healthData.level || 1) + 1}</Text>
+                <Text style={styles.xpText}>{xpRemaining} XP to Level {(healthData.level || 1) + 1}</Text>
               </View>
             </View>
 
