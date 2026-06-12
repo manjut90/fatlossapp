@@ -102,7 +102,7 @@ export function HealthProvider({ children }: any) {
 
         supabase
           .from('user_progress')
-          .select('streak,xp')
+          .select('streak,xp,last_celebrated_level')
           .eq('user_id', userId)
           .maybeSingle(),
 
@@ -166,6 +166,8 @@ export function HealthProvider({ children }: any) {
         level: levelInfo.level,
         streak,
         timeline: [],
+        lastCelebratedLevel:
+          progressResult.data?.last_celebrated_level ?? 0,
       };
       
       setHealthData(newHealthData);
@@ -204,7 +206,10 @@ export function HealthProvider({ children }: any) {
 
     previousXPRef.current = currentXP;
 
-    if (newLevel > previousLevel) {
+    if (
+      newLevel > previousLevel &&
+      newLevel > (healthData?.lastCelebratedLevel ?? 0)
+    ) {
       const levelInfo = getLevelFromXP(currentXP);
 
       setPendingLevelUp({

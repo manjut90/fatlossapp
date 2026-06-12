@@ -50,6 +50,7 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { LevelUpModal } from '../components/LevelUpModal';
+import { updateLastCelebratedLevel } from '../services/progress';
 
 // ── PROGRESS RING component ──
 function ProgressRing({
@@ -108,8 +109,6 @@ export default function HomeScreen() {
     pendingLevelUp,
     clearPendingLevelUp,
   } = useHealth();
-
-  console.log('PENDING LEVEL UP', pendingLevelUp);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -377,12 +376,6 @@ export default function HomeScreen() {
     if (pct >= 1) return 'Hit ✓';
     return 'On track';
   };
-
-  console.log('XP DEBUG', {
-    xp: healthData?.xp,
-    totalXp: healthData?.totalXp,
-    level: healthData?.level,
-  });
 
   return (
     <View style={styles.container}>
@@ -687,7 +680,15 @@ export default function HomeScreen() {
         visible={!!pendingLevelUp}
         level={pendingLevelUp?.level ?? 1}
         title={pendingLevelUp?.title ?? ''}
-        onClose={clearPendingLevelUp}
+        onClose={async () => {
+        try {
+          await updateLastCelebratedLevel(
+            pendingLevelUp?.level ?? 0
+          );
+        } finally {
+          clearPendingLevelUp();
+        }
+      }}
       />
     </View>
   );
