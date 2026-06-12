@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from 'react';
 
 import { supabase } from '../services/supabase';
@@ -48,6 +49,7 @@ export function HealthProvider({ children }: any) {
   const [healthData, setHealthData] = useState(DEFAULT_HEALTH_DATA);
   const [initialized, setInitialized] = useState(false);
   const [pendingLevelUp, setPendingLevelUp] = useState(null);
+  const previousXPRef = useRef<number | null>(null);
 
   // ==========================================
   // LOAD TODAY'S REAL DATA FROM SUPABASE
@@ -129,7 +131,7 @@ export function HealthProvider({ children }: any) {
       const todayCaloriesBurned = activityResult.data?.reduce((s, r) => s + (Number(r.calories_burned) || 0), 0) ?? 0;
 
       // Streak
-      console.log('PROGRESS DEBUG', progressResult);
+      
       const streak = progressResult.data?.streak ?? 0;
       const totalXp = progressResult.data?.xp ?? 0;
 
@@ -165,10 +167,10 @@ export function HealthProvider({ children }: any) {
         streak,
         timeline: [],
       };
-      console.log('NEW HEALTH DATA', newHealthData);
+      
       setHealthData(newHealthData);
     } catch (err) {
-  console.error('HEALTH CONTEXT ERROR', err);
+  console.error(err);
 } finally {
       setInitialized(true);
     }
@@ -178,6 +180,39 @@ export function HealthProvider({ children }: any) {
   useEffect(() => {
     loadTodayData();
   }, [loadTodayData]);
+
+  useEffect(() => {
+    const currentXP = healthData?.totalXp ?? 0;
+
+    // first render
+    if (previousXPRef.current === null) {
+      previousXPRef.current = currentXP;
+      return;
+    }
+
+    // ignore no change or decrease
+    if (currentXP <= previousXPRef.current) {
+      previousXPRef.current = currentXP;
+      return;
+    }
+
+    const previousLevel =
+      getLevelFromXP(previousXPRef.current).level;
+
+    const newLevel =
+      getLevelFromXP(currentXP).level;
+
+    previousXPRef.current = currentXP;
+
+    if (newLevel > previousLevel) {
+      const levelInfo = getLevelFromXP(currentXP);
+
+      setPendingLevelUp({
+        level: levelInfo.level,
+        title: levelInfo.title,
+      });
+    }
+  }, [healthData?.totalXp]);
 
   // ==========================================
   // UPDATE HEALTH DATA
