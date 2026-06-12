@@ -128,8 +128,7 @@ export function HealthProvider({ children }: any) {
 
       // Streak
       const streak = progressResult.data?.streak ?? 0;
-      const totalXp =
-  progressResult.data?.xp ?? 0;
+      const totalXp = progressResult.data?.xp ?? 0;
 
       // XP
       const xp = xpResult.data?.reduce((s, r) => s + (Number(r.xp) || 0), 0) ?? 0;
@@ -141,6 +140,8 @@ export function HealthProvider({ children }: any) {
         workout: todayWorkout,
         sleep: todaySleep,
       });
+
+      const levelInfo = getLevelFromXP(totalXp);
 
       const newHealthData = {
         todayCalories: Math.round(todayCalories),
@@ -155,7 +156,7 @@ export function HealthProvider({ children }: any) {
         dailyScore,
         xp: Math.round(xp),
         totalXp: Math.round(totalXp),
-        level: Math.floor(totalXp / 500) + 1,
+        level: levelInfo.level,
         streak,
         timeline: [],
       };
