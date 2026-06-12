@@ -15,6 +15,7 @@ export interface PrestigeTier {
 export interface Achievement {
   id: string; // e.g., 'FIRST_POST'
   unlockedAt: string; // ISO 8601 date string
+  metadata?: Record<string, any>;
 }
 
 /**
