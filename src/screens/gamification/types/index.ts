@@ -1,5 +1,7 @@
 // src/gamification/types/index.ts
 
+import { AchievementDefinition } from '../engine/achievements';
+
 /**
  * Represents a single tier of prestige, unlocked at a certain level.
  */
@@ -29,4 +31,5 @@ export interface GamificationState {
   prestigeTier: PrestigeTier;
   currentStreak: number;
   achievements: Achievement[];
+  pendingAchievement: AchievementDefinition | null;
 }

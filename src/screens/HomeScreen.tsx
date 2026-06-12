@@ -51,6 +51,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { LevelUpModal } from '../components/LevelUpModal';
 import { updateLastCelebratedLevel } from '../services/progress';
+import { AchievementUnlockedModal } from '../components/AchievementUnlockedModal';
+import { useGamificationStore } from './gamification/store/useGamificationStore';
 
 // ── PROGRESS RING component ──
 function ProgressRing({
@@ -101,6 +103,10 @@ export default function HomeScreen() {
   const navigation = useNavigation<any>();
     const [firstName, setFirstName] = useState('');
   const [greeting, setGreeting] = useState('Hey');
+  const {
+    pendingAchievement,
+    clearPendingAchievement,
+  } = useGamificationStore();
 
   const { profile } = useAuth();
   const {
@@ -379,6 +385,12 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      <AchievementUnlockedModal
+        visible={!!pendingAchievement}
+        name={pendingAchievement?.name || ''}
+        description={pendingAchievement?.description || ''}
+        onClose={clearPendingAchievement}
+      />
       <LinearGradient
         colors={['#0B1020', '#0B1020', '#0B1020']}
         style={StyleSheet.absoluteFillObject}

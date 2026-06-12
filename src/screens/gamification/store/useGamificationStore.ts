@@ -3,13 +3,15 @@
 import { create } from 'zustand';
 import { GamificationState } from '../types';
 import { PRESTIGE_TIERS } from '../engine/constants';
+import { AchievementDefinition } from '../engine/achievements';
 
 /**
  * Actions available to mutate the gamification store.
  */
 interface GamificationActions {
   setState: (newState: Partial<GamificationState>) => void;
-  // This will be expanded with actions for optimistic updates, etc.
+  setPendingAchievement: (achievement: AchievementDefinition | null) => void;
+  clearPendingAchievement: () => void;
 }
 
 /**
@@ -26,7 +28,10 @@ export const useGamificationStore = create<GamificationState & GamificationActio
   prestigeTier: PRESTIGE_TIERS[0], // 'White' tier
   currentStreak: 0,
   achievements: [],
+  pendingAchievement: null,
 
   // Actions
   setState: (newState) => set((state) => ({ ...state, ...newState })),
+  setPendingAchievement: (achievement) => set({ pendingAchievement: achievement }),
+  clearPendingAchievement: () => set({ pendingAchievement: null }),
 }));
