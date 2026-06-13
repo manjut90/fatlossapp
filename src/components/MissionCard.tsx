@@ -151,11 +151,12 @@ export function MissionCard() {
       {/* Header */}
       <View style={styles.header}>
         <Zap size={12} color="#8B7CFF" />
-        <Text style={styles.headerText}>TODAY'S MISSION</Text>
+        <Text style={styles.headerText}>NEO'S MISSION FOR TODAY</Text>
         {allDone && <Text style={styles.allDoneText}>✓ COMPLETE</Text>}
       </View>
 
       {/* Coach message */}
+      <Text style={styles.coachSubtle}>Neo prepared this mission based on your recent progress.</Text>
       <Text style={styles.coachMsg}>"{mission.coach_message}"</Text>
 
       {/* Divider */}
@@ -209,6 +210,12 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontStyle: 'italic',
     lineHeight: 19,
+  },
+  coachSubtle: {
+    fontSize: 11,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 4,
   },
   divider: {
     height: 1,
