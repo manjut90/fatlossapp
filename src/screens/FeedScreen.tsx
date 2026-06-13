@@ -4,7 +4,7 @@ import {
   Image, StatusBar, ScrollView, Share, Modal, TextInput,
   KeyboardAvoidingView, Platform, Dimensions, Animated, Alert
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, X, Plus, Bell, MessageSquare, Grid, Play } from 'lucide-react-native';
@@ -15,6 +15,9 @@ import PostViewerModal from '../components/profile/PostViewerModal';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
+import { getLevel } from '../services/level';
+import { achievementOrchestrator } from './gamification/services/AchievementOrchestrator';
+import { useGamificationStore } from './gamification/store/useGamificationStore';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -75,8 +78,6 @@ const getRankBadge = (xp: number = 0) => {
   if (xp >= 500) return {label:'Silver',color:'#C9D0DA',bg:'rgba(201,208,218,0.2)'}; 
   return {label:'Bronze',color:'#C27A5B',bg:'rgba(194,122,91,0.2)'}; 
 }; 
-
-const getLevel = (xp: number = 0) => Math.floor(xp / 1000) + 1;
 
 const PostCard = ({ post }: any) => {
   const navigation = useNavigation<any>();
@@ -266,7 +267,7 @@ const ReelItem = ({ post }: any) => {
               </Text>
               {(()=>{
                 const rank = getRankBadge(post.profiles?.xp || 0);
-                const level = Math.floor((post.profiles?.xp||0)/1000)+1;
+                const level = getLevel(post.profiles?.xp || 0);
                 return(
                   <View style={{flexDirection:'row',alignItems:'center',gap:4}}>
                     <View style={{paddingHorizontal:6,paddingVertical:1,borderRadius:6,backgroundColor:rank.bg}}>
@@ -312,6 +313,9 @@ const ReelItem = ({ post }: any) => {
 // 3. Add RLS: authenticated users can insert own stories
 // 4. Add RLS: public can view stories
 export default function FeedScreen() {
+  console.log(
+    'FEED_SCREEN_ACTIVE'
+  );
   const [posts, setPosts] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('Posts');
@@ -368,14 +372,16 @@ export default function FeedScreen() {
     setStories(mergedStories);
   };
 
-  useEffect(() => {
-    fetchFeedData();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchFeedData();
+    }, [])
+  );
 
   const handleAddStory = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [9, 16],
         quality: 0.8,
@@ -401,6 +407,11 @@ export default function FeedScreen() {
       if (dbError) { Alert.alert('Error', dbError.message); return; }
       Alert.alert('Story posted!', 'Your story will disappear in 24 hours.');
       fetchFeedData();
+
+      const newAchievement = await achievementOrchestrator.checkForNewAchievements(user.id);
+      if (newAchievement) {
+        // TODO: Handle achievement display if needed in the future
+      }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Something went wrong.');
     }
@@ -439,7 +450,15 @@ export default function FeedScreen() {
           <TouchableOpacity onPress={()=>navigation.navigate('Notifications')} style={{width:38,height:38,borderRadius:12,backgroundColor:'#131929',alignItems:'center',justifyContent:'center'}}>
             <Bell size={20} color="#F7F8FC"/>
           </TouchableOpacity>
-          <TouchableOpacity onPress={()=>navigation.navigate('Messages')} style={{width:38,height:38,borderRadius:12,backgroundColor:'#131929',alignItems:'center',justifyContent:'center'}}>
+          <TouchableOpacity onPress={() => {
+            console.log('[MESSAGES BUTTON PRESSED]');
+            try {
+              navigation.navigate('Messages');
+              console.log('[NAVIGATION CALLED]');
+            } catch (e) {
+              console.error('[NAV ERROR]', e);
+            }
+          }} style={{width:38,height:38,borderRadius:12,backgroundColor:'#131929',alignItems:'center',justifyContent:'center'}}>
             <MessageSquare size={20} color="#F7F8FC"/>
           </TouchableOpacity>
         </View>

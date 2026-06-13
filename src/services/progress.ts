@@ -1,4 +1,5 @@
 import { supabase } from '../services/supabase';
+import { getLevel } from './level';
 
 export async function addXp(
   amount: number,
@@ -34,8 +35,7 @@ export async function addXp(
       (existing.xp || 0) +
       amount;
 
-    const level =
-      Math.floor(newXp / 500) + 1;
+    const level = getLevel(newXp);
 
     await supabase
       .from('user_progress')

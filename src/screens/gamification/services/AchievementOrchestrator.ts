@@ -2,6 +2,7 @@
 
 import { User } from '@supabase/supabase-js';
 import { achievementService } from './AchievementService';
+import { awardCheckInXp } from '../../../services/xp';
 import { ACHIEVEMENTS, AchievementDefinition } from '../engine/achievements';
 
 class AchievementOrchestrator {
@@ -44,6 +45,27 @@ class AchievementOrchestrator {
         // 4. Return FIRST newly unlocked achievement
         if (isUnlocked) {
           console.log(`[AchievementOrchestrator] New achievement unlocked: ${definition.name}`);
+          // Persist the achievement to the database before notifying the UI
+          await achievementService.unlockAchievement(userId, definition.id);
+
+          console.log(
+            'ACHIEVEMENT_XP_START',
+            definition.id,
+            definition.xp
+          );
+
+          const xpResult =
+            await awardCheckInXp(
+              definition.xp,
+              `Achievement: ${definition.name}`,
+              userId
+            );
+
+          console.log(
+            'ACHIEVEMENT_XP_RESULT',
+            xpResult
+          );
+
           return definition;
         }
       }

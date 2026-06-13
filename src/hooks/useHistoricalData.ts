@@ -14,6 +14,8 @@ interface DailyData {
   sleep: number;
   workoutCount: number;
   caloriesBurned: number;
+  weight: number;
+  workout: boolean;
 }
 
 interface HistoricalData {
@@ -53,7 +55,7 @@ export function useHistoricalData(): HistoricalData {
       const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
 
       // Fetch all logs for last 30 days
-      const [foodLogs, activityLogs, hydrationLogs, sleepLogs] = await Promise.all([
+      const [foodLogs, activityLogs, hydrationLogs, sleepLogs, weightLogs] = await Promise.all([
         supabase
           .from('food_logs')
           .select('created_at, calories, protein, carbs, fats, fiber')
@@ -77,6 +79,12 @@ export function useHistoricalData(): HistoricalData {
           .select('created_at, hours')
           .eq('user_id', user.id)
           .gte('created_at', thirtyDaysAgoISO),
+
+        supabase
+          .from('weight_logs')
+          .select('created_at, weight')
+          .eq('user_id', user.id)
+          .gte('created_at', thirtyDaysAgoISO),
       ]);
 
       // Group by date
@@ -96,6 +104,8 @@ export function useHistoricalData(): HistoricalData {
           sleep: 0,
           workoutCount: 0,
           caloriesBurned: 0,
+          weight: 0,
+          workout: false,
         });
       }
 
@@ -119,6 +129,7 @@ export function useHistoricalData(): HistoricalData {
         if (entry) {
           entry.workoutCount += 1;
           entry.caloriesBurned += Number(log.calories_burned) || 0;
+          entry.workout = true;
         }
       });
 
@@ -137,6 +148,15 @@ export function useHistoricalData(): HistoricalData {
         const entry = dataByDate.get(dateStr);
         if (entry) {
           entry.sleep = Math.max(entry.sleep, Number(log.hours) || 0);
+        }
+      });
+
+      // Aggregate weight logs
+      weightLogs.data?.forEach((log: any) => {
+        const dateStr = log.created_at.split('T')[0];
+        const entry = dataByDate.get(dateStr);
+        if (entry) {
+          entry.weight = Math.max(entry.weight, Number(log.weight) || 0);
         }
       });
 

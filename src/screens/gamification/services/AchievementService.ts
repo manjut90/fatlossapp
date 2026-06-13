@@ -39,38 +39,69 @@ class AchievementService {
     achievementId: string,
     metadata?: Record<string, any>
   ): Promise<Achievement> {
-    const { data, error } = await supabase
-      .from('user_achievements')
-      .upsert(
+    console.log('UNLOCK_START', achievementId);
+    try {
+      const session = await supabase.auth.getSession();
+
+      console.log(
+        'ACHIEVEMENT_SESSION_USER',
+        session.data.session?.user?.id
+      );
+
+      console.log(
+        'ACHIEVEMENT_FUNCTION_USER_ID',
+        userId
+      );
+
+      console.log(
+        'ACHIEVEMENT_INSERT_PAYLOAD',
         {
           user_id: userId,
           achievement_id: achievementId,
           metadata,
-        },
-        { onConflict: 'user_id, achievement_id', ignoreDuplicates: true }
-      )
-      .select('achievement_id, unlocked_at, metadata')
-      .single();
+        }
+      );
 
-    if (error) {
-      console.error('Error unlocking achievement:', error);
-      throw error;
+      const { data, error } = await supabase
+        .from('user_achievements')
+        .upsert(
+          {
+            user_id: userId,
+            achievement_id: achievementId,
+            metadata,
+          },
+          { onConflict: 'user_id, achievement_id', ignoreDuplicates: true }
+        )
+        .select('achievement_id, unlocked_at, metadata')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      console.log('UNLOCK_SUCCESS', data);
+
+      // If data is null, it means the achievement already existed and was ignored.
+      // We should fetch it to return the complete achievement object.
+      if (!data) {
+        const existing = await this.hasAchievement(userId, achievementId);
+        if (existing) return existing;
+        // This case should ideally not be reached if the upsert is configured correctly
+        throw new Error('Failed to retrieve existing achievement after upsert.');
+      }
+
+      return {
+        id: data.achievement_id,
+        unlockedAt: data.unlocked_at,
+        metadata: data.metadata,
+      };
+    } catch (err) {
+      console.log(
+        'ACHIEVEMENT_UNLOCK_ERROR',
+        JSON.stringify(err, null, 2)
+      );
+      throw err;
     }
-
-    // If data is null, it means the achievement already existed and was ignored.
-    // We should fetch it to return the complete achievement object.
-    if (!data) {
-      const existing = await this.hasAchievement(userId, achievementId);
-      if (existing) return existing;
-      // This case should ideally not be reached if the upsert is configured correctly
-      throw new Error('Failed to retrieve existing achievement after upsert.');
-    }
-
-    return {
-      id: data.achievement_id,
-      unlockedAt: data.unlocked_at,
-      metadata: data.metadata,
-    };
   }
 
   /**

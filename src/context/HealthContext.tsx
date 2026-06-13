@@ -206,12 +206,27 @@ export function HealthProvider({ children }: any) {
 
     previousXPRef.current = currentXP;
 
+    console.log('LEVEL_CHECK', {
+      previousXP: previousXPRef.current,
+      currentXP,
+      previousLevel,
+      newLevel,
+    });
     if (
       newLevel > previousLevel &&
       newLevel > (healthData?.lastCelebratedLevel ?? 0)
     ) {
+      console.log(
+        'LEVEL_UP_TRIGGER',
+        previousLevel,
+        newLevel
+      );
       const levelInfo = getLevelFromXP(currentXP);
 
+      console.log(
+        'SETTING_PENDING_LEVEL_UP',
+        levelInfo
+      );
       setPendingLevelUp({
         level: levelInfo.level,
         title: levelInfo.title,

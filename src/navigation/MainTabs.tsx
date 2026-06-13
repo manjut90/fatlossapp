@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, TrendingUp, Newspaper, Bot, User } from 'lucide-react-native';
 
@@ -96,10 +97,11 @@ function CustomTabBar({ state, descriptors, navigation }) {
 }
 
 export default function MainTabs() {
+  const navigation = useNavigation();
   const [neoVisible, setNeoVisible] = useState(false);
 
   const handleMediaPress = () => {
-    // Implement media press logic
+    navigation.navigate('CreatePost');
   };
 
   return (

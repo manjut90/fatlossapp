@@ -8,6 +8,7 @@ export interface AchievementDefinition {
   id: string;
   name: string;
   description: string;
+  xp: number;
   verifier: (user: User) => Promise<boolean>;
 }
 
@@ -16,6 +17,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: 'FIRST_POST',
     name: 'First Post',
     description: 'Create your first post in the feed.',
+    xp: 50,
     verifier: async (user: User) => {
       const { count, error } = await supabase
         .from('posts')
@@ -30,6 +32,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: 'WORKOUT_MASTER',
     name: 'Workout Master',
     description: 'Complete 10 "hard" workouts.',
+    xp: 500,
     verifier: async (user: User) => {
       const { count, error } = await supabase
         .from('user_workouts')
@@ -45,6 +48,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     id: 'STREAK_7',
     name: '7-Day Streak',
     description: 'Maintain a 7-day check-in streak.',
+    xp: 250,
     verifier: async (user: User) => {
       const { data, error } = await supabase
         .from('user_progress')

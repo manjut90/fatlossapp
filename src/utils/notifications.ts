@@ -24,22 +24,13 @@ console.log(
   JSON.stringify(permissions, null, 2)
 );
   if (Device.isDevice) {
-    const {
-      status: existingStatus,
-    } =
-      await Notifications.getPermissionsAsync();
+    const permissions = await Notifications.getPermissionsAsync();
+    const existingStatus = (permissions as any).status;
 
-    let finalStatus =
-      existingStatus;
-
-    if (
-      existingStatus !== 'granted'
-    ) {
-      const {
-        status,
-      } =
-        await Notifications.requestPermissionsAsync();
-
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const permissions = await Notifications.requestPermissionsAsync();
+      const status = (permissions as any).status;
       finalStatus = status;
     }
 

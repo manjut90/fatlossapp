@@ -1,0 +1,1 @@
+export const getLevel = (xp: number) => Math.floor(xp / 1000) + 1;

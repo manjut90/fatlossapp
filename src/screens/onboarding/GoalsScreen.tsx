@@ -125,10 +125,9 @@ export default function GoalsScreen({
           <Text
             style={styles.subtitle}
           >
-            Your body adapts to
-            the mission you give
-            it. Choose the outcome
-            you want to build.
+            Every morning your AI coach creates a mission for you.
+            You don't have to decide what to do.
+            Just complete today's mission.
           </Text>
         </View>
 

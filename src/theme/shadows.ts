@@ -16,7 +16,7 @@ import { colors } from './colors';
 
 export const shadows = {
   sm: {
-    shadowColor: colors.light.shadow,
+    shadowColor: colors.light.text,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -26,7 +26,7 @@ export const shadows = {
     elevation: 2,
   },
   md: {
-    shadowColor: colors.light.shadow,
+    shadowColor: colors.light.text,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -36,7 +36,7 @@ export const shadows = {
     elevation: 5,
   },
   lg: {
-    shadowColor: colors.light.shadow,
+    shadowColor: colors.light.text,
     shadowOffset: {
       width: 0,
       height: 8,

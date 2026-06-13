@@ -51,14 +51,14 @@ export default function ProgressScreen() {
 
   const firstName = profile?.full_name?.split(' ')[0] || 'Champ';
   const goal = profile?.goal || profile?.goals?.[0] || 'fat_loss';
-  const startWeight = parseFloat(profile?.current_weight) || parseFloat(profile?.weight) || parseFloat(currentWeight) || 0;
-  const currWeight = parseFloat(currentWeight) || parseFloat(profile?.current_weight) || 0;
-  const goalWeight = parseFloat(profile?.target_weight) > 0
-    ? parseFloat(profile?.target_weight)
-    : parseFloat(profile?.current_weight) > 0
-      ? Math.max(parseFloat(profile?.current_weight) - 5, 50)
+  const startWeight = parseFloat(profile?.current_weight || '0') || parseFloat(profile?.weight || '0') || parseFloat(String(currentWeight)) || 0;
+  const currWeight = parseFloat(String(currentWeight)) || parseFloat(profile?.current_weight || '0') || 0;
+  const goalWeight = parseFloat(profile?.target_weight || '0') > 0
+    ? parseFloat(profile?.target_weight || '0')
+    : parseFloat(profile?.current_weight || '0') > 0
+      ? Math.max(parseFloat(profile?.current_weight || '0') - 5, 50)
       : '--';
-  const targetWeight = parseFloat(profile?.target_weight) || 65;
+  const targetWeight = parseFloat(profile?.target_weight || '0') || 65;
   const weightDiff = parseFloat((startWeight - currWeight).toFixed(1));
   const isLoss = goal === 'fat_loss' ? weightDiff >= 0 : weightDiff <= 0;
   const weightDiffAbs = Math.abs(weightDiff);
@@ -142,7 +142,7 @@ Each array must have exactly 2 items. Each item max 12 words. Be specific with n
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: 'claude-3-haiku-20240307',
           max_tokens: 1000,
           messages: [{ role: 'user', content: prompt }],
         }),

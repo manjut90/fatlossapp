@@ -108,6 +108,11 @@ export default function HomeScreen() {
     clearPendingAchievement,
   } = useGamificationStore();
 
+  console.log(
+    'HOME_PENDING_ACHIEVEMENT',
+    pendingAchievement
+  );
+
   const { profile } = useAuth();
   const {
     healthData,

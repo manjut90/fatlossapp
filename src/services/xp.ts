@@ -22,10 +22,20 @@ export async function awardCheckInXp(
   reason = 'Check-In',
   user_id?: string,
 ) {
+  console.log('XP_AWARD_START', {
+    amount,
+    reason,
+    user_id,
+  });
+
   try {
     const resolvedUserId =
       user_id ||
       (await getCurrentUserId());
+
+    console.log('XP_RESOLVED_USER', resolvedUserId);
+
+    console.log('XP_LOG_INSERT_START');
 
     const { error } =
       await supabase
@@ -34,42 +44,87 @@ export async function awardCheckInXp(
           user_id: resolvedUserId,
           xp: amount,
           reason,
-          created_at:
-            new Date().toISOString(),
+          created_at: new Date().toISOString(),
         });
 
-   if (error) {
-  throw error;
-}
+    console.log('XP_LOG_INSERT_RESULT', error);
 
-const { data: progress } =
-  await supabase
-    .from('user_progress')
-    .select('xp')
-    .eq('user_id', resolvedUserId)
-    .single();
+    if (error) {
+      throw error;
+    }
 
-const currentXp =
-  progress?.xp || 0;
+    const { data: progress, error: progressError } =
+      await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', resolvedUserId)
+        .maybeSingle();
 
-const { error: xpError } =
-  await supabase
-    .from('user_progress')
-    .update({
-      xp: currentXp + amount,
-    })
-    .eq('user_id', resolvedUserId);
+    console.log(
+      'USER_PROGRESS_FETCH',
+      progress,
+      progressError
+    );
 
-if (xpError) {
-  throw xpError;
-}
+    if (progressError) {
+      throw progressError;
+    }
 
-return {
-  success: true,
-  xp: amount,
-};
+    if (!progress) {
+      console.log('USER_PROGRESS_MISSING: Creating new row for user', resolvedUserId);
+      await supabase
+        .from('user_progress')
+        .insert({
+          user_id: resolvedUserId,
+          xp: amount,
+          level: 1,
+          streak: 0,
+          last_celebrated_level: 0,
+        });
+    
+      console.log('XP_AWARD_SUCCESS (via insert)');
+      return {
+        success: true,
+        xp: amount,
+      };
+    }
+
+    const currentXp =
+      progress?.xp || 0;
+
+    console.log(
+      'XP_UPDATE_START',
+      currentXp,
+      amount
+    );
+
+    const { data: updateData, error: xpError } =
+      await supabase
+        .from('user_progress')
+        .update({
+          xp: currentXp + amount,
+        })
+        .eq('user_id', resolvedUserId)
+        .select();
+
+    console.log(
+      'XP_UPDATE_RESULT',
+      updateData,
+      xpError
+    );
+
+    if (xpError) {
+      throw xpError;
+    }
+
+    console.log('XP_AWARD_SUCCESS');
+
+    return {
+      success: true,
+      xp: amount,
+    };
   } catch (err) {
-    console.log(err);
+    console.log('XP_AWARD_FAILED', err);
 
     return {
       success: false,

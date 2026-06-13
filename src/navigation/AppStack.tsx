@@ -8,6 +8,7 @@ import CheckInScreen from '../screens/CheckInScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import FitnessGoalsScreen from '../screens/FitnessGoalsScreen';
+import CreatePostScreen from '../screens/CreatePostScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -38,6 +39,7 @@ export default function AppStack() {
           />
           <Stack.Screen name="EditProfile" component={EditProfileScreen}/>
           <Stack.Screen name="FitnessGoals" component={FitnessGoalsScreen}/>
+          <Stack.Screen name="CreatePost" component={CreatePostScreen} options={{ presentation: 'modal' }}/>
         </Stack.Navigator>
       </View>
     </SafeAreaProvider>

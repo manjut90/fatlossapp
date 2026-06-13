@@ -13,14 +13,20 @@ import * as FileSystem from 'expo-file-system';
 import { supabase } from '../services/supabase';
 import PostViewerModal from '../components/profile/PostViewerModal';
 
+interface Post {
+  id: string;
+  image_url: string;
+  content: string;
+}
+
 export default function ProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { profile, user, refreshProfile } = useAuth();
-  const [posts, setPosts] = useState([]);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [postViewerVisible, setPostViewerVisible] = useState(false);
-  const [selectedPost, setSelectedPost] = useState(null);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -36,7 +42,7 @@ export default function ProfileScreen() {
         console.error('Error fetching posts:', error);
       }
       if (data) {
-        setPosts(data);
+        setPosts(data as Post[]);
       }
     };
 
@@ -72,7 +78,7 @@ export default function ProfileScreen() {
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, {uri, base64}, { contentType, upsert: true });
+        .upload(filePath, base64, { contentType, upsert: true });
 
       if (uploadError) {
         throw uploadError;
@@ -184,7 +190,7 @@ export default function ProfileScreen() {
          <Text style={ps.sectionTitle}>POSTS</Text> 
          {posts?.length>0 
            ?<View style={ps.grid}> 
-             {posts.map((p,i)=>( 
+             {posts.map((p: Post, i) => ( 
                <TouchableOpacity key={p.id||i} style={ps.gridItem} onPress={() => { setSelectedPost(p); setPostViewerVisible(true); }}> 
                  {p.image_url 
                    ?<Image source={{uri:p.image_url}} style={ps.gridImg}/> 

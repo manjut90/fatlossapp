@@ -158,7 +158,7 @@ export default function LifestyleScreen({
         <Text
           style={styles.subtitle}
         >
-          Fuel your plan with real data.
+          This helps Neo create missions that fit your life.
         </Text>
 
         {/* ACTIVITY */}

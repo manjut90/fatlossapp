@@ -309,9 +309,7 @@ export default function PersonalInfoScreen({
           <Text
             style={styles.subtitle}
           >
-            Personalized insights
-            to optimize your body
-            transformation journey.
+            Neo will use this to create your missions.
           </Text>
 
           {/* NAME */}

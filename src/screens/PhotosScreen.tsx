@@ -9,7 +9,7 @@ import {
   Animated,
 } from 'react-native';
 
-import ProfileHeader from '../components/profile/ProfileHeader';
+
 
 import WorkoutPosts from '../components/profile/WorkoutPosts';
 
@@ -66,17 +66,7 @@ export default function ProfileScreen() {
           },
         ]}
       >
-        <ProfileHeader
-          name="MJ"
-          followers="12.8K"
-          following="412"
-          posts="87"
-          onSettingsPress={() =>
-            setSettingsVisible(
-              true
-            )
-          }
-        />
+
       </Animated.View>
 
       {/* CONTENT */}
