@@ -232,6 +232,19 @@ export default function HomeScreen() {
   const computedMacros = calculateMacros({ calories: computedCalories, weight: currentWeight, goal: userGoal });
 
   const caloriesGoal = parseFloat(profile?.target_calories) || computedCalories;
+
+  console.log('LFGO_CALORIES_DEBUG', {
+    profileGoal: profile?.goal,
+    profileGoals: profile?.goals,
+    activityLevel: profile?.activity_level,
+    currentWeight,
+    profileHeight,
+    bmr,
+    tdee,
+    computedCalories,
+    caloriesGoal
+  });
+  
   const proteinGoal = parseFloat(profile?.target_protein) || computedMacros.protein;
   const carbsGoal = parseFloat(profile?.target_carbs) || computedMacros.carbs;
   const fatsGoal = parseFloat(profile?.target_fats) || computedMacros.fats;
