@@ -259,20 +259,19 @@ const FoodSheet = forwardRef(
      if (result.canceled || !result.assets?.[0]?.base64) return; 
      setLoading(true); 
      setError(''); 
-     const claudeKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY; 
-     const res = await fetch(' https://api.anthropic.com/v1/messages ', { 
-       method: 'POST', 
-       headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey || '', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, 
-       body: JSON.stringify({ 
-         model: 'claude-haiku-4-5-20251001', 
-         max_tokens: 300, 
+     const { data, error } = await supabase.functions.invoke('coach-chat', {
+       body: {
          messages: [{ role: 'user', content: [ 
            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: result.assets[0].base64 } }, 
            { type: 'text', text: 'Identify the food in this image and estimate: meal name, calories, protein(g), carbs(g), fats(g). Respond only as JSON: {"meal_name":string,"calories":number,"protein":number,"carbs":number,"fats":number}' } 
-         ]}] 
-       }), 
-     }); 
-     const data = await res.json(); 
+         ]}],
+         system: "You are a sports nutritionist. Respond only with raw JSON.",
+         max_tokens: 300,
+       }
+     });
+     if (error || !data) {
+       throw error || new Error('Failed to analyze image');
+     }
      const text = data?.content?.[0]?.text?.replace(/```json/gi,'').replace(/```/g,'').trim() || ''; 
      const parsed = JSON.parse(text); 
      setMeal(parsed.meal_name); 

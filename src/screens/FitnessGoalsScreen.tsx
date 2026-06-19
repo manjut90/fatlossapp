@@ -33,13 +33,13 @@ export default function FitnessGoalsScreen(){
   const nav=useNavigation<any>(); 
   const insets=useSafeAreaInsets(); 
   const {profile,refreshProfile}=useAuth(); 
-  const [weight,setWeight]=useState(String(profile?.weight||'')); 
+  const [weight,setWeight]=useState(String(profile?.current_weight||profile?.weight||'')); 
   const [height,setHeight]=useState(String(profile?.height||'')); 
   const [targetWeight,setTargetWeight]=useState(String(profile?.target_weight||'')); 
-  const [goal,setGoal]=useState(profile?.goal||'fat_loss'); 
+  const [goal,setGoal]=useState(profile?.goal||profile?.goals?.[0]||'fat_loss'); 
   const [activity,setActivity]=useState(profile?.activity_level||'Moderately Active'); 
   const [experience,setExperience]=useState(profile?.training_experience||'Beginner'); 
-  const [gym,setGym]=useState(profile?.gym_access||'gym'); 
+  const [gym,setGym]=useState(profile?.workout_preference||profile?.gym_access||'gym'); 
   const [saving,setSaving]=useState(false); 
 
   const handleSave=async()=>{ 
@@ -48,13 +48,14 @@ export default function FitnessGoalsScreen(){
       const {data:{user}}=await supabase.auth.getUser(); 
       if(!user) return; 
       await supabase.from('profiles').update({ 
-        weight:parseFloat(weight), 
+        current_weight:parseFloat(weight), 
         height:parseFloat(height), 
         target_weight:parseFloat(targetWeight), 
-        goal,activity_level:activity, 
+        goal,
+        goals:[goal],
+        activity_level:activity, 
         training_experience:experience, 
-        gym_access:gym, 
-        updated_at:new Date().toISOString(), 
+        workout_preference:gym, 
       }).eq('id',user.id); 
       await refreshProfile?.(); 
       Alert.alert('Saved','Fitness goals updated.'); 

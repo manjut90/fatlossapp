@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Zap, TrendingDown, TrendingUp, Flame, RefreshCw, CheckCircle2, Circle, Clock3 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../services/supabase';
 import { useHealth } from '../context/HealthContext';
 import { useProgressMetrics } from '../hooks/useProgressMetrics';
 import { useHistoricalData } from '../hooks/useHistoricalData';
@@ -109,7 +110,7 @@ export default function ProgressScreen() {
     const avgSleep = last7.length ? (last7.reduce((s, d) => s + (d.sleep || 0), 0) / last7.length).toFixed(1) : 0;
     const workoutDays = last7.filter(d => d.workout).length;
 
-    const prompt = `You are a world-class fitness coach reviewing ${firstName}'s ${periodLabel.toLowerCase()} data. Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
+    const prompt = `You are Neo, a world-class fitness expert reviewing ${firstName}'s ${periodLabel.toLowerCase()} data. Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
 
 Data:
 - Goal: ${goal.replace(/_/g, ' ')}
@@ -132,26 +133,16 @@ Respond with this exact JSON structure:
 Each array must have exactly 2 items. Each item max 12 words. Be specific with numbers. No fluff.`;
 
     try {
-      const claudeKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': claudeKey || '',
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-3-haiku-20240307',
-          max_tokens: 1000,
+      const { data, error } = await supabase.functions.invoke('coach-chat', {
+        body: {
           messages: [{ role: 'user', content: prompt }],
-        }),
+          system: "You are Neo, a world-class fitness expert. Respond only with raw JSON.",
+          max_tokens: 1000,
+        }
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(`Claude API failed: ${res.status}`);
+      if (error || !data) {
+        throw error || new Error('Failed to get summary from coach-chat');
       }
-      const data = await res.json();
       const text = data?.content?.[0]?.text?.trim() || '';
       const clean = text.replace(/```json/gi,'').replace(/```/g,'').trim();
       const parsed = JSON.parse(clean);

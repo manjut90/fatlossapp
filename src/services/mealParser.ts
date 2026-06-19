@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
 
 import {
   FoodCategory,
@@ -350,58 +351,22 @@ export function parseMultipleFoods(
 async function parseMealWithAI(
   description: string,
 ): Promise<ClaudeMeal | null> {
-  const apiKey =
-    process.env
-      .EXPO_PUBLIC_ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    console.error('Missing EXPO_PUBLIC_ANTHROPIC_API_KEY');
-    return null;
-  }
-
   try {
-    const response = await fetch(
-      'https://api.anthropic.com/v1/messages',
-      {
-        method: 'POST',
-      headers: {
-        'content-type':
-            'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version':
-            '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model:
-            'claude-sonnet-4-20250514',
-          max_tokens: 300,
-          system: SYSTEM_PROMPT,
-          messages: [
-            {
-              role: 'user',
-              content: description,
-            },
-          ],
-        }),
-      },
-    );
+    const { data, error } = await supabase.functions.invoke('coach-chat', {
+      body: {
+        messages: [{ role: 'user', content: description }],
+        system: SYSTEM_PROMPT,
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+      }
+    });
 
-    if (!response.ok) {
-      const errorText =
-        await response.text();
-      console.error('MEAL PARSE ERROR:', JSON.stringify(errorText));
-      console.error('API STATUS:', response.status);
-      throw new Error(
-        `Claude API error (${response.status}): ${errorText}`,
-      );
+    if (error || !data) {
+      console.error('MEAL PARSE ERROR:', JSON.stringify(error));
+      throw new Error(`Claude API error: ${error || 'No response'}`);
     }
 
-    const result =
-      await response.json();
-
-    const textContent =
-      result?.content?.[0]?.text;
+    const textContent = data?.content?.[0]?.text;
 
     if (!textContent) {
       throw new Error(

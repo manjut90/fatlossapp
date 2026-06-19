@@ -63,7 +63,7 @@ export default function NeoMiniChat({visible,onClose}:Props){
       const goal = profile?.goal || profile?.goals?.[0] || 'fitness';
       const weight = profile?.current_weight || profile?.weight || '70';
 
-      const systemPrompt = `You are Neo, a witty Gen-Z fitness coach. You are talking to ${name} whose goal is ${goal} and weight is ${weight}kg. Keep responses short, direct, under 3 sentences. No fluff.
+      const systemPrompt = `You are Neo, a witty Gen-Z fitness guide. You are talking to ${name} whose goal is ${goal} and weight is ${weight}kg. Keep responses short, direct, under 3 sentences. No fluff.
 
 TODAY'S MISSIONS (you assigned these):
 ${missionContext}

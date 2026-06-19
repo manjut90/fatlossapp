@@ -136,7 +136,7 @@ export function MissionCard() {
     return (
       <View style={styles.card}>
         <ActivityIndicator color="#8B7CFF" />
-        <Text style={styles.loadingText}>Coach is preparing your mission...</Text>
+        <Text style={styles.loadingText}>Neo is preparing your mission...</Text>
       </View>
     );
   }

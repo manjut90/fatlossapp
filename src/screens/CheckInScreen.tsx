@@ -167,7 +167,7 @@ export default function CheckInScreen() {
               }}>
                 <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF', letterSpacing: 1 }}>NEO</Text>
               </View>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#8B7CFF', letterSpacing: 1 }}>Your Fitness Coach</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#8B7CFF', letterSpacing: 1 }}>NEO</Text>
             </View>
             <Text style={{ fontSize: 26, fontWeight: '900', color: '#1B1B1B', lineHeight: 36 }}>
               {`Hey ${firstName}, what are we `}

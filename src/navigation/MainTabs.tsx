@@ -29,7 +29,7 @@ const screenIcons = {
   Home: Home,
   Progress: TrendingUp,
   Feed: Newspaper,
-  Coach: Bot,
+  Neo: Bot,
   Profile: User,
 };
 
@@ -116,7 +116,7 @@ export default function MainTabs() {
         <Tab.Screen name="Home" component={HomeScreen} />
         <Tab.Screen name="Progress" component={ProgressScreen} />
         <Tab.Screen name="Feed" component={FeedStackScreen} />
-        <Tab.Screen name="Coach" component={AICoachScreen} />
+        <Tab.Screen name="Neo" component={AICoachScreen} />
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>
       <FloatingActionButton

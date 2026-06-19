@@ -45,7 +45,7 @@ const CoachChatSheet = forwardRef<BottomSheet, Props>(
         id: '0',
         role: 'coach',
         message:
-          "Hey! I'm Neo, your personal fitness coach 👋 Tell me about your meals, workouts, water or sleep — or just ask me anything.",
+          "Hey! I'm Neo, your personal fitness guide 👋 Tell me about your meals, workouts, water or sleep — or just ask me anything.",
         timestamp: new Date(),
       },
     ]);
@@ -129,10 +129,10 @@ const CoachChatSheet = forwardRef<BottomSheet, Props>(
               <Text style={styles.neoText}>N</Text>
             </View>
             <View>
-              <Text style={styles.headerTitle}>Neo Coach</Text>
+              <Text style={styles.headerTitle}>Neo</Text>
               <View style={styles.onlineRow}>
                 <View style={styles.onlineDot} />
-                <Text style={styles.headerSub}>Online · Your AI fitness coach</Text>
+                <Text style={styles.headerSub}>Online · Your AI fitness guide</Text>
               </View>
             </View>
           </View>

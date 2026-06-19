@@ -1,71 +1,67 @@
-import * as Notifications from 'expo-notifications';
-
-import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import { supabase } from '../services/supabase';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-
-async function savePushToken(token: string) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    console.log('No user found, skipping push token save.');
+// Stub implementations for non-Android platforms to prevent loading native modules
+export async function registerForPushNotificationsAsync() {
+  if (Platform.OS !== 'android') {
+    console.log('Skipping push notification registration on non-Android platform.');
     return;
   }
 
-  const { error } = await supabase.from('push_tokens').upsert(
-    {
-      user_id: user.id,
-      token: token,
-      platform: Platform.OS,
-    },
-    { onConflict: 'token' }
-  );
+  // Lazily import only on Android
+  const Notifications = await import('expo-notifications');
+  const Device = await import('expo-device');
+  const { supabase } = await import('../services/supabase');
 
-  if (error) {
-    console.error('❌ Error saving push token:', error);
-  } else {
-    console.log('✅ Push token saved');
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+
+  async function savePushToken(token: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      console.log('No user found, skipping push token save.');
+      return;
+    }
+
+    const { error } = await supabase.from('push_tokens').upsert(
+      {
+        user_id: user.id,
+        token: token,
+        platform: Platform.OS,
+      },
+      { onConflict: 'token' }
+    );
+
+    if (error) {
+      console.error('❌ Error saving push token:', error);
+    } else {
+      console.log('✅ Push token saved');
+    }
   }
-}
 
-console.log('DEVICE IS DEVICE:', Device.isDevice);
-export async function registerForPushNotificationsAsync() {
-  
-  const permissions =
-  await Notifications.getPermissionsAsync();
+  const permissions = (await Notifications.getPermissionsAsync()) as any;
+  console.log('PERMISSIONS:', JSON.stringify(permissions, null, 2));
 
-console.log(
-  'PERMISSIONS:',
-  JSON.stringify(permissions, null, 2)
-);
   if (Device.isDevice) {
-    const permissions = await Notifications.getPermissionsAsync();
-    const existingStatus = (permissions as any).status;
-
+    const existingStatus = permissions.status;
     let finalStatus = existingStatus;
     if (existingStatus !== 'granted') {
-       const permissions = await Notifications.requestPermissionsAsync();
-       const status = (permissions as any).status;
-       finalStatus = status;
-     }
+      const { status } = (await Notifications.requestPermissionsAsync()) as any;
+      finalStatus = status;
+    }
 
-     if (
-       finalStatus !== 'granted'
-     ) {
-       alert('Failed to get push token for push notification!');
-       return;
-     }
-   }
+    if (finalStatus !== 'granted') {
+      console.warn('Failed to get push token for push notification!');
+      return;
+    }
+  }
 
   try {
     const token = (await Notifications.getExpoPushTokenAsync()).data;
@@ -80,30 +76,21 @@ console.log(
     await savePushToken(newToken.data);
   });
 
-  if (Platform.OS === 'android') {
-    Notifications.setNotificationChannelAsync(
-      'default',
-      {
-        name: 'default',
-
-        importance:
-          Notifications.AndroidImportance.MAX,
-
-        vibrationPattern: [
-          0,
-          250,
-          250,
-          250,
-        ],
-
-        lightColor:
-          '#F59E0B',
-      }
-    );
-  }
+  Notifications.setNotificationChannelAsync(
+    'default',
+    {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#F59E0B',
+    }
+  );
 }
 
 export async function scheduleDailyReminder() {
+  if (Platform.OS !== 'android') return;
+  const Notifications = await import('expo-notifications');
+
   await Notifications.cancelAllScheduledNotificationsAsync();
 
   await Notifications.scheduleNotificationAsync({
@@ -112,34 +99,32 @@ export async function scheduleDailyReminder() {
       body: 'Open LFGO and complete today’s mission.',
       sound: true,
     },
-
     trigger: {
-  type: Notifications.SchedulableTriggerInputTypes.DAILY,
-  hour: 7,
-  minute: 0,
-},
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour: 7,
+      minute: 0,
+    } as any,
   });
 
-  console.log(
-    '✅ 7AM mission reminder scheduled'
-  );
+  console.log('✅ 7AM mission reminder scheduled');
 }
+
 export async function scheduleNoonReminder() {
+  if (Platform.OS !== 'android') return;
+  const Notifications = await import('expo-notifications');
+
   await Notifications.scheduleNotificationAsync({
     content: {
       title: 'Still time today 💪',
       body: 'Your daily mission is waiting.',
       sound: true,
     },
-
     trigger: {
-  type: Notifications.SchedulableTriggerInputTypes.DAILY,
-  hour: 12,
-  minute: 0,
-},
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour: 12,
+      minute: 0,
+    } as any,
   });
 
-  console.log(
-    '✅ Noon reminder scheduled'
-  );
+  console.log('✅ Noon reminder scheduled');
 }

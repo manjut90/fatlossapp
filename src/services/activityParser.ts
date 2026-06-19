@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
 import { activityDatabase, ActivityEntry } from '../constants/activityDatabase';
 
 export interface ActivityResult {
@@ -135,25 +136,17 @@ async function parseActivityWithAI(description: string, weightKg: number): Promi
   } catch {}
 
   try {
-    const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-    if (!apiKey) return null;
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
+    const { data, error } = await supabase.functions.invoke('coach-chat', {
+      body: {
+        messages: [{ role: 'user', content: description }],
+        system: 'You are a fitness expert. Given an activity description, return ONLY a JSON object with: activity_name (string), activity_type (cardio/strength/sports/yoga/daily), duration_minutes (number), met_value (number between 1-15). No extra text, just JSON.',
         model: 'claude-sonnet-4-20250514',
         max_tokens: 200,
-        system: 'You are a fitness expert. Given an activity description, return ONLY a JSON object with: activity_name (string), activity_type (cardio/strength/sports/yoga/daily), duration_minutes (number), met_value (number between 1-15). No extra text, just JSON.',
-        messages: [{ role: 'user', content: description }],
-      }),
+      }
     });
 
-    const data = await response.json();
+    if (error || !data) return null;
+
     const text = data.content?.[0]?.text ?? '';
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);

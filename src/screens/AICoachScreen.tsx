@@ -30,7 +30,10 @@ import { useHealth } from '../context/HealthContext';
 import { addActivity } from '../services/activity';
 import { addFood } from '../services/food';
 import { supabase } from '../services/supabase';
+import { getLocalDateString } from '../utils/localDate';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { awardCheckInXp } from '../services/xp';
+import { updateDailyStreak } from '../services/streaks';
 import {
   calculateBMR,
   calculateTDEE,
@@ -89,11 +92,11 @@ function generateMealPlan(profile) {
     }));
   }
 
-  const weight = parseFloat(profile?.weight) || 70;
+  const weight = parseFloat(profile?.current_weight || profile?.weight) || 70;
   const height = parseFloat(profile?.height) || 170;
   const gender = profile?.sex || 'Male';
   const activityLevel = profile?.activity_level || 'Moderately Active';
-  const goal = profile?.goal || 'fitness';
+  const goal = profile?.goal || profile?.goals?.[0] || 'fitness';
 
   const conditions = parseHealthConditions(profile?.health_conditions);
   const isVegetarian = conditions.includes('vegetarian');
@@ -458,9 +461,9 @@ function generateWorkoutPlan(profile) {
     };
   }
 
-  const goal = profile.goal || 'fitness';
+  const goal = profile.goal || profile.goals?.[0] || 'fitness';
   const experience = profile.training_experience || 'Beginner';
-  const gymAccess = profile.gym_access || 'gym';
+  const gymAccess = profile.workout_preference || profile.gym_access || 'gym';
 
   const goalWorkouts =
     workoutDatabase[goal] || workoutDatabase.healthy_lifestyle;
@@ -497,10 +500,13 @@ export default function AICoachScreen() {
   const navigation = useNavigation();
   const { profile } = useAuth();
   const { healthData, refreshHealthData } = useHealth();
+  const [yesterdayMissionCompleted, setYesterdayMissionCompleted] = useState(false);
+  const [yesterdayWorkoutCompleted, setYesterdayWorkoutCompleted] = useState(false);
+  const [yesterdayMissionExists, setYesterdayMissionExists] = useState(true);
 
   const firstName = profile?.full_name?.split(' ')[0] || 'Champ';
-  const goal = profile?.goal || 'fitness';
-  const weight = parseFloat(profile?.weight) || 70;
+  const goal = profile?.goal || profile?.goals?.[0] || 'fitness';
+  const weight = parseFloat(profile?.current_weight || profile?.weight) || 70;
   const height = parseFloat(profile?.height) || 170;
 
   const heroMessage = goal === 'fat_loss'
@@ -509,12 +515,11 @@ export default function AICoachScreen() {
     ? `Muscle is built in the kitchen as much as the gym. Your plan maximises both.`
     : `Peak fitness is a daily practice. Your personalised plan adapts to your lifestyle.`
 
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
-  const yesterdayWorkoutCompleted = (healthData?.timeline || []).some(
-    (entry: any) => entry?.date?.startsWith(yesterdayStr) && entry?.workout
-  );
+  const isTrainedYesterday = yesterdayWorkoutCompleted || yesterdayMissionCompleted;
+  const shouldShowMissedWorkoutBanner =
+    yesterdayMissionExists &&
+    !isTrainedYesterday &&
+    healthData.streak > 0;
 
   const gender = profile?.sex || 'Male';
   const activityLevel = profile?.activity_level || 'Moderately Active';
@@ -550,19 +555,49 @@ export default function AICoachScreen() {
       meal: any | null;
     }>({ visible: false, meal: null });
     const [recipeLoading, setRecipeLoading] = useState(false);
+  const [todayMission, setTodayMission] = useState<any>(null);
+
+  const movementMissionIndex = todayMission?.missions
+    ? todayMission.missions.findIndex((m: any) => m.category === 'movement')
+    : -1;
+  const isTodayMovementMissionCompleted = !!(
+    todayMission &&
+    todayMission.completed_missions &&
+    movementMissionIndex !== -1 &&
+    todayMission.completed_missions.includes(movementMissionIndex)
+  );
+  const todaysWorkoutCompleted = isWorkoutCheckedIn || isTodayMovementMissionCompleted;
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   const aiWorkouts = aiWorkoutPlan || generateWorkoutPlan(profile);
 
+  const getOrFetchTodayMission = async (force = false) => {
+    if (todayMission && !force) return todayMission;
+    if (!profile?.id) return null;
+    try {
+      const today = getLocalDateString();
+      const { data, error } = await supabase
+        .from('daily_missions')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('date', today)
+        .maybeSingle();
+      if (!error && data) {
+        setTodayMission(data);
+        return data;
+      }
+    } catch (err) {
+      console.error('Failed to getOrFetchTodayMission:', err);
+    }
+    return null;
+  };
+
   const fetchAIMeals = async (forceRefresh = false) => {
-    console.log('fetchAIMeals called. Claude key present:', !!process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY);
     if (!profile) return;
     setMealsLoading(true);
 
-    const macros = { protein: targetProtein, carbs: targetCarbs, fats: targetFats };
-
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const cacheKey = `ai_meals_${profile?.id}_${today}`;
 
     if (!forceRefresh) {
@@ -576,13 +611,10 @@ export default function AICoachScreen() {
       } catch {}
     }
 
-    const claudeKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-    if (!claudeKey) {
-      console.error('Anthropic API key missing. Loading static fallback.');
-      setAiGeneratedMeals([...vegMealPlan, ...nonVegMealPlan].map((m, i) => ({ ...m, id: i + 1 })));
-      setMealsLoading(false);
-      return;
-    }
+    const activeMission = await getOrFetchTodayMission(forceRefresh);
+    const missionContext = activeMission?.missions
+      ? activeMission.missions.map((m: any, idx: number) => `${idx + 1}. ${m.title} - ${m.description}`).join('\n')
+      : 'None';
 
     const bfCals = Math.round(targetCalories * 0.25);
     const snackCals = Math.round(targetCalories * 0.10);
@@ -598,80 +630,196 @@ export default function AICoachScreen() {
  Calories per slot: Breakfast ${bfCals}kcal, Snacks ${snackCals}kcal, Lunch ${lunchCals}kcal, Dinner ${dinnerCals}kcal. 
  80%+ authentic Indian dishes. All meals type must be "${dietType}". 
  
+ Today's assigned daily missions for the user:
+ ${missionContext}
+ 
+ Important: Your recommended meals should not contradict these daily missions. If a daily mission mentions avoiding certain things (e.g. no liquid calories), make sure your meal plan aligns with it.
+ 
  Respond ONLY with a JSON array of 15 objects. No markdown. No backticks. No extra text. 
  Each object: { "id": number, "time": "Breakfast"|"Morning Snack"|"Lunch"|"Evening Snack"|"Dinner", "title": string, "description": string (max 10 words), "calories": number, "protein": number, "carbs": number, "fats": number, "fiber": number, "type": "${dietType}" } 
  
  Do NOT include recipe. Just the 15 meal objects.`; 
  
     try {
- const callClaude = async (prompt: string) => { 
-   const res = await fetch('https://api.anthropic.com/v1/messages', { 
-     method: 'POST', 
-     headers: { 
-       'Content-Type': 'application/json', 
-       'x-api-key': claudeKey || '', 
-       'anthropic-version': '2023-06-01', 
-       'anthropic-dangerous-direct-browser-access': 'true', 
-     }, 
-     body: JSON.stringify({ 
-       model: 'claude-haiku-4-5-20251001', 
-       max_tokens: 4000, 
-       messages: [{ role: 'user', content: prompt }], 
-     }), 
-   }); 
-   if (!res.ok) { 
-     const err = await res.json(); 
-     console.error('Claude error:', res.status, JSON.stringify(err)); 
-     throw new Error(`Claude API failed: ${res.status}`); 
-   } 
-   const data = await res.json(); 
-   const raw = data?.content?.[0]?.text || ''; 
-   return raw.replace(/```json/gi,'').replace(/```/g,'').trim(); 
- }; 
+      const callClaude = async (prompt: string) => { 
+        const { data, error } = await supabase.functions.invoke('coach-chat', {
+          body: {
+            messages: [{ role: 'user', content: prompt }],
+            system: "You are a world-class Indian sports nutritionist. Respond only with raw JSON.",
+            max_tokens: 4000,
+          }
+        });
+        if (error || !data) { 
+          throw error || new Error('Failed to fetch from coach-chat'); 
+        } 
+        const raw = data?.content?.[0]?.text || ''; 
+        return raw.replace(/```json/gi,'').replace(/```/g,'').trim(); 
+      }; 
  
- console.log('Fetching veg & non-veg meals in parallel...'); 
- const [vegText, nonVegText] = await Promise.all([ 
-   callClaude(makePrompt('veg')), 
-   callClaude(makePrompt('non-veg')), 
- ]); 
+      console.log('Fetching veg & non-veg meals in parallel via Edge Function...'); 
+      const [vegText, nonVegText] = await Promise.all([ 
+        callClaude(makePrompt('veg')), 
+        callClaude(makePrompt('non-veg')), 
+      ]); 
  
- const vegMeals = JSON.parse(vegText); 
- const nonVegMeals = JSON.parse(nonVegText); 
+      const vegMeals = JSON.parse(vegText); 
+      const nonVegMeals = JSON.parse(nonVegText); 
  
- if (!Array.isArray(vegMeals) || !Array.isArray(nonVegMeals) || vegMeals.length === 0 || nonVegMeals.length === 0) { 
-   throw new Error('Invalid meal response format from Claude'); 
- } 
+      if (!Array.isArray(vegMeals) || !Array.isArray(nonVegMeals) || vegMeals.length === 0 || nonVegMeals.length === 0) { 
+        throw new Error('Invalid meal response format from Claude'); 
+      } 
  
- // Reassign IDs to avoid duplicates 
- const allMeals = [ 
-   ...vegMeals.map((m, i) => ({ ...m, id: i + 1, type: 'veg' })), 
-   ...nonVegMeals.map((m, i) => ({ ...m, id: i + 1 + vegMeals.length, type: 'non-veg' })), 
- ]; 
+      // Reassign IDs to avoid duplicates 
+      const allMeals = [ 
+        ...vegMeals.map((m, i) => ({ ...m, id: i + 1, type: 'veg' })), 
+        ...nonVegMeals.map((m, i) => ({ ...m, id: i + 1 + vegMeals.length, type: 'non-veg' })), 
+      ]; 
  
- console.log('AI meals received:', allMeals.length, 'veg:', vegMeals.length, 'non-veg:', nonVegMeals.length); 
+      console.log('AI meals received:', allMeals.length, 'veg:', vegMeals.length, 'non-veg:', nonVegMeals.length); 
  
- const slotTargets = { 
-   'Breakfast': { cal: bfCals, p: Math.round(targetProtein*0.25), c: Math.round(targetCarbs*0.25), f: Math.round(targetFats*0.20) }, 
-   'Morning Snack': { cal: snackCals, p: Math.round(targetProtein*0.10), c: Math.round(targetCarbs*0.10), f: Math.round(targetFats*0.10) }, 
-   'Lunch': { cal: lunchCals, p: Math.round(targetProtein*0.30), c: Math.round(targetCarbs*0.30), f: Math.round(targetFats*0.30) }, 
-   'Evening Snack': { cal: snackCals, p: Math.round(targetProtein*0.10), c: Math.round(targetCarbs*0.10), f: Math.round(targetFats*0.10) }, 
-   'Dinner': { cal: dinnerCals, p: Math.round(targetProtein*0.25), c: Math.round(targetCarbs*0.25), f: Math.round(targetFats*0.30) }, 
- }; 
- const normalizedMeals = allMeals.map(meal => { 
-   const t = slotTargets[meal.time]; 
-   if (!t) return meal; 
-   const ratio = meal.calories > 0 ? t.cal / meal.calories : 1; 
-   const needsFix = Math.abs(ratio - 1) > 0.25; // Allow slightly more variance 
-   return needsFix ? { ...meal, calories: t.cal, protein: t.p, carbs: t.c, fats: t.f, fiber: Math.round(t.cal / 35) } : meal; 
- }); 
+      const slotTargets = { 
+        'Breakfast': { cal: bfCals, p: Math.round(targetProtein*0.25), c: Math.round(targetCarbs*0.25), f: Math.round(targetFats*0.20) }, 
+        'Morning Snack': { cal: snackCals, p: Math.round(targetProtein*0.10), c: Math.round(targetCarbs*0.10), f: Math.round(targetFats*0.10) }, 
+        'Lunch': { cal: lunchCals, p: Math.round(targetProtein*0.30), c: Math.round(targetCarbs*0.30), f: Math.round(targetFats*0.30) }, 
+        'Evening Snack': { cal: snackCals, p: Math.round(targetProtein*0.10), c: Math.round(targetCarbs*0.10), f: Math.round(targetFats*0.10) }, 
+        'Dinner': { cal: dinnerCals, p: Math.round(targetProtein*0.25), c: Math.round(targetCarbs*0.25), f: Math.round(targetFats*0.30) }, 
+      }; 
+      const normalizedMeals = allMeals.map(meal => { 
+        const t = slotTargets[meal.time as keyof typeof slotTargets]; 
+        if (!t) return meal; 
+        const ratio = meal.calories > 0 ? t.cal / meal.calories : 1; 
+        const needsFix = Math.abs(ratio - 1) > 0.25; // Allow slightly more variance 
+        return needsFix ? { ...meal, calories: t.cal, protein: t.p, carbs: t.c, fats: t.f, fiber: Math.round(t.cal / 35) } : meal; 
+      }); 
  
- setAiGeneratedMeals(normalizedMeals); 
- await AsyncStorage.setItem(cacheKey, JSON.stringify(normalizedMeals));
+      setAiGeneratedMeals(normalizedMeals); 
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(normalizedMeals));
     } catch (error) {
       console.error('Failed to fetch or parse AI meals, using static fallback:', error);
       setAiGeneratedMeals(generateMealPlan(profile));
     } finally {
       setMealsLoading(false);
+    }
+  };
+
+  const fetchAIWorkout = async () => {
+    if (!profile?.id) return;
+    setWorkoutLoading(true);
+
+    // If today's daily_missions record exists, use it as the source of truth
+    const activeMission = await getOrFetchTodayMission(true);
+    if (activeMission) {
+      const movementMission = activeMission.missions.find((m: any) => m.category === 'movement') || activeMission.missions[0];
+      if (movementMission) {
+        setAiWorkoutPlan({
+          todaysWorkout: {
+            title: movementMission.title,
+            description: movementMission.description,
+            duration: "30 mins",
+            intensity: "Moderate",
+            exercises: [
+              { name: movementMission.title, sets: "1", reps: "1" }
+            ]
+          },
+          yesterdaysWorkout: {
+            title: "Rest Day",
+            description: "Rest and recover.",
+            duration: "0 mins",
+            intensity: "Low",
+            exercises: []
+          }
+        });
+        setWorkoutLoading(false);
+        return;
+      }
+    }
+
+    const today = getLocalDateString();
+    const cacheKey = `ai_workout_${profile.id}_${today}`;
+
+    try {
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        setAiWorkoutPlan(JSON.parse(cached));
+        setWorkoutLoading(false);
+        return;
+      }
+    } catch {}
+
+    const goal = profile?.goal || profile?.goals?.[0] || 'fitness';
+    const experience = profile?.training_experience || 'Beginner';
+    const gymAccess = profile?.workout_preference || profile?.gym_access || profile?.gymAccess || 'gym';
+    const weight = parseFloat(profile?.current_weight || profile?.weight) || 70;
+
+    const missionContext = activeMission?.missions
+      ? activeMission.missions.map((m: any, idx: number) => `${idx + 1}. ${m.title} - ${m.description}`).join('\n')
+      : 'None';
+
+    const prompt = `You are Neo — India's top fitness expert. Combine the science of Jeff Nippard with the practicality of an Indian gym culture. Design two complete workouts.
+
+User:
+- Goal: ${goal.replace(/_/g, ' ')}
+- Experience: ${experience}
+- Equipment: ${gymAccess === 'gym' ? 'Full commercial gym (barbells, cables, machines, dumbbells)' : 'Home only — dumbbells and bodyweight, no machines'}
+- Weight: ${weight}kg
+
+Today's assigned daily missions for the user:
+${missionContext}
+
+Important: Your recommended workouts should not contradict these daily missions. For example, if a daily mission is a "15-Min Walk", do not design a workout that actively prevents the user from achieving it or contradicts it.
+
+RULES:
+1. todaysWorkout and yesterdaysWorkout must target DIFFERENT muscle groups or energy systems.
+2. Each workout must have EXACTLY 6-8 exercises.
+3. Include a warm-up note in the description.
+4. Use exercise names that Indian gym-goers understand. Prefer common names (e.g. 'Chest Press' not 'Bench Press', 'Lat Pulldown', 'Leg Press', 'Dumbbell Curl', 'Overhead Press').
+5. For home workouts: use only push-ups, squats, lunges, planks, dumbbell exercises.
+6. Sets: 3-4. Reps: specific ranges like '10-12' or '8-10'. No vague instructions.
+7. Workouts must be appropriate for ${experience} level — not too advanced, not too easy.
+
+Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
+{
+  "todaysWorkout": {
+    "title": string,
+    "description": string (include warm-up tip),
+    "duration": string,
+    "intensity": string,
+    "exercises": [ { "name": string, "sets": string, "reps": string } ]
+  },
+  "yesterdaysWorkout": {
+    "title": string,
+    "description": string,
+    "duration": string,
+    "intensity": string,
+    "exercises": [ { "name": string, "sets": string, "reps": string } ]
+  }
+}`;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('coach-chat', {
+        body: {
+          messages: [{ role: 'user', content: prompt }],
+          system: "You are Neo, India's top fitness expert. Respond only with raw JSON.",
+          max_tokens: 2000,
+        }
+      });
+      if (error || !data) {
+        throw error || new Error('Failed to get response from coach-chat');
+      }
+      const raw = data?.content?.[0]?.text || '';
+      const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const plan = JSON.parse(clean);
+      if (plan?.todaysWorkout && plan?.yesterdaysWorkout) {
+        setAiWorkoutPlan(plan);
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(plan));
+      } else {
+        setAiWorkoutPlan(generateWorkoutPlan(profile));
+      }
+    } catch (err) {
+      console.log('AI workout failed, using static:', err);
+      setAiWorkoutPlan(generateWorkoutPlan(profile));
+    } finally {
+      setWorkoutLoading(false);
     }
   };
 
@@ -708,119 +856,130 @@ export default function AICoachScreen() {
     }
   }, [mealsLoading]);
 
-  const fetchAIWorkout = async () => {
-    if (!profile?.id) return;
-    setWorkoutLoading(true);
-
-    const today = new Date().toISOString().split('T')[0];
-    const cacheKey = `ai_workout_${profile.id}_${today}`;
-
-    try {
-      const cached = await AsyncStorage.getItem(cacheKey);
-      if (cached) {
-        setAiWorkoutPlan(JSON.parse(cached));
-        setWorkoutLoading(false);
-        return;
-      }
-    } catch {}
-
-    const goal = profile?.goal || 'fitness';
-    const experience = profile?.training_experience || 'Beginner';
-    const gymAccess = profile?.gym_access || profile?.gymAccess || 'gym';
-    const weight = parseFloat(profile?.weight) || 70;
-
-    const prompt = `You are India's top fitness coach — combine the science of Jeff Nippard with the practicality of an Indian gym culture. Design two complete workouts.
-
-User:
-- Goal: ${goal.replace(/_/g, ' ')}
-- Experience: ${experience}
-- Equipment: ${gymAccess === 'gym' ? 'Full commercial gym (barbells, cables, machines, dumbbells)' : 'Home only — dumbbells and bodyweight, no machines'}
-- Weight: ${weight}kg
-
-RULES:
-1. todaysWorkout and yesterdaysWorkout must target DIFFERENT muscle groups or energy systems.
-2. Each workout must have EXACTLY 6-8 exercises.
-3. Include a warm-up note in the description.
-4. Use exercise names that Indian gym-goers understand. Prefer common names (e.g. 'Chest Press' not 'Bench Press', 'Lat Pulldown', 'Leg Press', 'Dumbbell Curl', 'Overhead Press').
-5. For home workouts: use only push-ups, squats, lunges, planks, dumbbell exercises.
-6. Sets: 3-4. Reps: specific ranges like '10-12' or '8-10'. No vague instructions.
-7. Workouts must be appropriate for ${experience} level — not too advanced, not too easy.
-
-Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
-{
-  "todaysWorkout": {
-    "title": string,
-    "description": string (include warm-up tip),
-    "duration": string,
-    "intensity": string,
-    "exercises": [ { "name": string, "sets": string, "reps": string } ]
-  },
-  "yesterdaysWorkout": {
-    "title": string,
-    "description": string,
-    "duration": string,
-    "intensity": string,
-    "exercises": [ { "name": string, "sets": string, "reps": string } ]
-  }
-}`;
-
-    try {
-      const claudeKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': claudeKey || '',
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        console.error('Claude error:', res.status, JSON.stringify(err));
-        throw new Error(`Claude API failed: ${res.status}`);
-      }
-      const data = await res.json();
-      const raw = data?.content?.[0]?.text || '';
-      const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
-      const plan = JSON.parse(clean);
-      if (plan?.todaysWorkout && plan?.yesterdaysWorkout) {
-        setAiWorkoutPlan(plan);
-        await AsyncStorage.setItem(cacheKey, JSON.stringify(plan));
-      } else {
-        setAiWorkoutPlan(generateWorkoutPlan(profile));
-      }
-    } catch (err) {
-      console.log('AI workout failed, using static:', err);
-      setAiWorkoutPlan(generateWorkoutPlan(profile));
-    } finally {
-      setWorkoutLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (profile?.id) {
       fetchAIMeals();
       fetchAIWorkout();
     }
-  }, [profile?.id]);
+  }, [profile?.id, healthData]);
 
+  useEffect(() => {
+    if (!profile?.id) return;
+    const checkYesterdayTraining = async () => {
+      try {
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterdayStrDate = getLocalDateString(yesterdayDate);
 
+        // 1. Check yesterday's daily mission
+        const { data: missionData, error: missionError } = await supabase
+          .from('daily_missions')
+          .select('missions, completed_missions')
+          .eq('user_id', profile.id)
+          .eq('date', yesterdayStrDate)
+          .maybeSingle();
+
+        let missionCompleted = false;
+        let missionExists = false;
+        if (!missionError && missionData) {
+          missionExists = true;
+          missionCompleted = !!(
+            missionData.completed_missions &&
+            missionData.missions &&
+            missionData.completed_missions.length === missionData.missions.length
+          );
+        }
+        setYesterdayMissionExists(missionExists);
+        setYesterdayMissionCompleted(missionCompleted);
+
+        // 2. Check yesterday's activity logs
+        const yesterdayStart = new Date();
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+        yesterdayStart.setHours(0, 0, 0, 0);
+
+        const yesterdayEnd = new Date();
+        yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
+        yesterdayEnd.setHours(23, 59, 59, 999);
+
+        const { data: activityData, error: activityError } = await supabase
+          .from('activity_logs')
+          .select('id')
+          .eq('user_id', profile.id)
+          .gte('created_at', yesterdayStart.toISOString())
+          .lte('created_at', yesterdayEnd.toISOString());
+
+        let workoutCompleted = false;
+        if (!activityError && activityData && activityData.length > 0) {
+          workoutCompleted = true;
+        }
+        setYesterdayWorkoutCompleted(workoutCompleted);
+
+        console.log('YESTERDAY_DATE', yesterdayStrDate);
+        console.log('MISSION_DATA', missionData);
+        console.log('MISSIONS_COUNT', missionData?.missions?.length);
+        console.log('COMPLETED_COUNT', missionData?.completed_missions?.length);
+        console.log('MISSION_COMPLETED', missionCompleted);
+        console.log('WORKOUT_COMPLETED', workoutCompleted);
+        console.log('IS_TRAINED_YESTERDAY', missionExists ? (workoutCompleted || missionCompleted) : true);
+
+      } catch (err) {
+        console.error('Failed to check yesterday training status:', err);
+      }
+    };
+    checkYesterdayTraining();
+  }, [profile?.id, healthData]);
 
   const handleWorkoutCheckIn = async () => {
-    // In a real app, you'd call an API here to save the data.
-    setIsWorkoutCheckedIn(true);
-    await addActivity({
-      activity_type: workoutToShow.title,
-      duration: parseInt(workoutToShow.duration),
-      calories_burned: 350, // This is a placeholder, you might want to calculate this
-    });
-    await refreshHealthData();
+    if (!profile?.id) return;
+
+    try {
+      // 1. Log the activity in activity_logs
+      await addActivity({
+        activity_name: workoutToShow.title,
+        duration: parseInt(workoutToShow.duration),
+        calories_burned: 350, // This is a placeholder, you might want to calculate this
+      });
+
+      // 2. If daily mission exists, complete the movement mission
+      if (todayMission && movementMissionIndex !== -1) {
+        if (!todayMission.completed_missions.includes(movementMissionIndex)) {
+          const updatedCompleted = [...todayMission.completed_missions, movementMissionIndex];
+          const allCompleted = updatedCompleted.length === todayMission.missions.length;
+          const earnedXp = todayMission.missions[movementMissionIndex]?.xp ?? 50;
+
+          // Optimistic update
+          setTodayMission((prev: any) =>
+            prev ? { ...prev, completed_missions: updatedCompleted } : prev
+          );
+
+          // Update database and award XP
+          const todayStr = getLocalDateString();
+          await Promise.all([
+            todayMission.id !== 'fallback'
+              ? supabase
+                  .from('daily_missions')
+                  .update({ completed_missions: updatedCompleted })
+                  .eq('id', todayMission.id)
+              : AsyncStorage.setItem(
+                  `completed_fallback_${profile.id}_${todayStr}`,
+                  JSON.stringify(updatedCompleted)
+                ),
+            awardCheckInXp(earnedXp, 'Mission Complete', profile.id),
+          ]);
+
+          if (allCompleted) {
+            await updateDailyStreak(profile.id);
+          }
+        }
+      } else {
+        // Fallback if no daily mission exists: set local checked-in state
+        setIsWorkoutCheckedIn(true);
+      }
+
+      await refreshHealthData();
+    } catch (err) {
+      console.error('Failed to check in workout:', err);
+    }
   };
 
   const handleMealCheckIn = async (meal: (typeof aiMeals)[0]) => {
@@ -848,16 +1007,19 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
     setRecipeLoading(true);
     setRecipeModal({ visible: true, meal: { ...meal, recipe: { prepTime: 'Loading...', cookTime: '', ingredients: [], steps: [] } } });
     try {
-      const claudeKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
       const prompt = `Give a quick recipe for "${meal.title}" (${meal.type}, Indian cuisine). 
  Respond ONLY with JSON: { "prepTime": string, "cookTime": string, "ingredients": string[], "steps": string[] } 
  Max 6 ingredients, max 5 steps. No markdown.`;
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey || '', 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 600, messages: [{ role: 'user', content: prompt }] }),
+      const { data, error } = await supabase.functions.invoke('coach-chat', {
+        body: {
+          messages: [{ role: 'user', content: prompt }],
+          system: "You are a world-class chef. Respond only with raw JSON.",
+          max_tokens: 600,
+        }
       });
-      const data = await res.json();
+      if (error || !data) {
+        throw error || new Error('Failed to get recipe from coach-chat');
+      }
       const raw = data?.content?.[0]?.text?.replace(/```json/gi,'').replace(/```/g,'').trim() || '';
       const recipe = JSON.parse(raw);
       setRecipeModal({ visible: true, meal: { ...meal, recipe } });
@@ -877,7 +1039,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
     return 'Good evening';
   };
 
-  const workoutToShow = yesterdayWorkoutCompleted
+  const workoutToShow = (todayMission || isTrainedYesterday)
     ? aiWorkouts.todaysWorkout
     : aiWorkouts.yesterdaysWorkout;
 
@@ -989,7 +1151,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
             </Animated.View>
           ) : (
             <>
-              {!yesterdayWorkoutCompleted && healthData.streak > 0 && (
+              {shouldShowMissedWorkoutBanner && (
                 <View style={styles.noticeCard}>
                   <Text style={styles.noticeText}>
                     Missed yesterday's session? Log it now to protect your streak.
@@ -1022,21 +1184,21 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
                     </View>
                   ))}
                 </View>
-                <TouchableOpacity
+                 <TouchableOpacity
                   style={[
                     styles.checkInButton,
-                    isWorkoutCheckedIn && styles.checkedInButton,
+                    todaysWorkoutCompleted && styles.checkedInButton,
                   ]}
                   onPress={handleWorkoutCheckIn}
-                  disabled={isWorkoutCheckedIn}
+                  disabled={todaysWorkoutCompleted}
                 >
-                  {isWorkoutCheckedIn ? (
+                  {todaysWorkoutCompleted ? (
                     <Check size={18} color="#FFFFFF" />
                   ) : (
                     <Zap size={18} color="#FFFFFF" />
                   )}
                   <Text style={styles.checkInButtonText}>
-                    {isWorkoutCheckedIn ? 'Grind logged ✔' : 'Log the grind ⚡'}
+                    {todaysWorkoutCompleted ? 'Grind logged ✔' : 'Log the grind ⚡'}
                   </Text>
                 </TouchableOpacity>
               </View>

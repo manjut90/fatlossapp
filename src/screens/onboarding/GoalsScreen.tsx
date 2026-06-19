@@ -125,7 +125,7 @@ export default function GoalsScreen({
           <Text
             style={styles.subtitle}
           >
-            Every morning your AI coach creates a mission for you.
+            Every morning Neo creates a mission for you.
             You don't have to decide what to do.
             Just complete today's mission.
           </Text>

@@ -66,6 +66,7 @@ export default function MedicalScreen({ navigation }: any) {
         height: parseFloat(updatedOnboardingData.height) || null,
         current_weight: parseFloat(updatedOnboardingData.currentWeight) || null,
         target_weight: parseFloat(updatedOnboardingData.targetWeight) || null,
+        goal: updatedOnboardingData.goals?.[0] || null,
         goals: updatedOnboardingData.goals,
         activity_level: updatedOnboardingData.activityLevel,
         sleep_hours: updatedOnboardingData.sleepHours,

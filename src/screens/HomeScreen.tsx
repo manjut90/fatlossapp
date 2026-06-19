@@ -49,6 +49,7 @@ import {
 } from 'lucide-react-native';
 
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../services/supabase';
 import { LevelUpModal } from '../components/LevelUpModal';
 import { updateLastCelebratedLevel } from '../services/progress';
 import { AchievementUnlockedModal } from '../components/AchievementUnlockedModal';
@@ -147,37 +148,23 @@ export default function HomeScreen() {
     const fetchAiSummary = async () => {
       setSummaryLoading(true);
       try {
-        const claudeKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-        if (!claudeKey) {
-          setAiSummary(getPrimeStateSummary()); // Fallback to local summary
-          return;
-        }
+        const prompt = `You are Neo, a world-class fitness and nutrition expert. The user's stats today: calories=${healthData.todayCalories}, protein=${healthData.todayProtein}g, water=${healthData.todayWater}ml, sleep=${healthData.todaySleep}h, workout=${healthData.todayWorkout}, goal=${userGoal}, current weight=${currentWeight}kg, target weight=${targetWeight}kg. Give ONE powerful, specific, data-driven insight in max 20 words. Be direct, specific to their numbers, no fluff.`;
 
-        const prompt = `You are a world-class fitness coach and nutritionist. The user's stats today: calories=${healthData.todayCalories}, protein=${healthData.todayProtein}g, water=${healthData.todayWater}ml, sleep=${healthData.todaySleep}h, workout=${healthData.todayWorkout}, goal=${userGoal}, current weight=${currentWeight}kg, target weight=${targetWeight}kg. Give ONE powerful, specific, data-driven coaching insight in max 20 words. Sound like the top 1% fitness coach. Be direct, specific to their numbers, no fluff.`;
-
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': claudeKey || '',
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 1000,
+        const { data, error } = await supabase.functions.invoke('coach-chat', {
+          body: {
             messages: [{ role: 'user', content: prompt }],
-          }),
+            system: "You are Neo, a world-class fitness and nutrition expert.",
+            max_tokens: 100,
+          }
         });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(`Claude API failed: ${res.status}`);
+        if (error || !data) {
+          throw error || new Error('Failed to get summary from coach-chat');
         }
-        const data = await res.json();
         const summary = data?.content?.[0]?.text?.trim() || getPrimeStateSummary();
         setAiSummary(summary);
 
       } catch (error) {
+        console.error('Failed to fetch AI summary:', error);
         setAiSummary(getPrimeStateSummary()); // Fallback on error
       } finally {
         setSummaryLoading(false);
@@ -333,7 +320,7 @@ export default function HomeScreen() {
     if (!todayWorkout) {
       return "No workout logged yet. Even 20 mins raises metabolism for 14 hours.";
     }
-    return "Log your meals and workout to unlock your personalised coaching insight.";
+    return "Log your meals and workout to unlock your personalised insight from Neo.";
   };
 
   // XP progress toward next level (1000 XP per level)

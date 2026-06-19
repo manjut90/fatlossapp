@@ -1,5 +1,5 @@
- import React,{useState} from 'react'; 
- import {View,Text,StyleSheet,ScrollView,TouchableOpacity,Switch,Alert} from 'react-native'; 
+import React,{useState} from 'react'; 
+ import {View,Text,StyleSheet,ScrollView,TouchableOpacity,Switch,Alert,Platform} from 'react-native'; 
  import {useNavigation} from '@react-navigation/native'; 
  import {useSafeAreaInsets} from 'react-native-safe-area-context'; 
  import {ArrowLeft,ChevronRight,User,Lock,Bell,Monitor,Ban,Shield,Info,HelpCircle,LogOut} from 'lucide-react-native'; 
@@ -90,6 +90,10 @@
  
          <Card title="Notifications" icon={<Bell size={16} color="#8B7CFF"/>}> 
            <Toggle label="Push Notifications" sub={notifs?'Notifications are on':'Notifications are off'} value={notifs} onChange={async(v)=>{ 
+             if (Platform.OS !== 'android') {
+               Alert.alert('Not Supported', 'Push notifications are not supported on iOS.');
+               return;
+             }
              setNotifs(v); 
              try{ 
                const {requestPermissionsAsync}=await import('expo-notifications'); 

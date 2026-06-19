@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
 import type { ProgressMetrics } from '../hooks/useProgressMetrics';
 
 interface InsightsResponse {
@@ -59,12 +60,6 @@ async function callClaudeAPI(
   detectedPositives: string[],
   detectedNegatives: string[]
 ): Promise<{ positives: string; negatives: string; recommendations: string }> {
-  const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('Claude API key not configured');
-  }
-
   const systemPrompt = `You are a world-class fitness coach and nutritionist with 30 years of experience.
 Your role is to provide personalized, actionable insights based on user's health data.
 You communicate with empathy, expertise, and practical wisdom.
@@ -101,33 +96,20 @@ Please provide THREE JSON sections in this exact format:
 
 Respond ONLY with valid JSON objects, one per line, no additional text.`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
+  const { data, error } = await supabase.functions.invoke('coach-chat', {
+    body: {
+      messages: [{ role: 'user', content: userPrompt }],
+      system: systemPrompt,
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: userPrompt,
-        },
-      ],
-    }),
+    }
   });
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`Claude API error: ${errorData.error?.message || response.statusText}`);
+  if (error || !data) {
+    throw new Error(`Claude API error: ${error || 'Failed to get insights'}`);
   }
 
-  const data = await response.json();
-  const content = data.content[0]?.text || '';
+  const content = data.content?.[0]?.text || '';
 
   // Parse JSON responses from Claude
   const lines = content.split('\n').filter((line: string) => line.trim().startsWith('{'));

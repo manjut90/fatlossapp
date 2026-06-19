@@ -1,16 +1,17 @@
 import { useEffect } from 'react';
 
-//import {
-  //registerForPushNotificationsAsync,
-  //scheduleDailyReminder,
-  //scheduleNoonReminder,
-//} from './src/utils/notifications';
+import {
+  registerForPushNotificationsAsync,
+  scheduleDailyReminder,
+  scheduleNoonReminder,
+} from './src/utils/notifications';
 import React from 'react';
 import 'react-native-reanimated';
 
 import {
   View,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 
 import Navigation from './src/navigation';
@@ -62,6 +63,11 @@ Sentry.init({
 
 function NotificationInitializer() {
   useEffect(() => {
+    if (Platform.OS !== 'android') {
+      console.log('📱 iOS platform detected: skipping push notification initialization');
+      return;
+    }
+
     console.log('🚀 NotificationInitializer mounted');
 
     async function setup() {
@@ -93,6 +99,7 @@ export default Sentry.wrap(function App() {
           <HealthProvider>
              <ThemeProvider>
                <Navigation />
+               <NotificationInitializer />
              </ThemeProvider>
            </HealthProvider>
         </OnboardingProvider>
