@@ -996,7 +996,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
                   </Text>
                   <TouchableOpacity
                     style={styles.forgotButton}
-                    onPress={() => navigation.navigate('LogActivity')}
+                    onPress={() => navigation.navigate('CheckIn')}
                   >
                     <Text style={styles.forgotButtonText}>
                       Yes, I trained yesterday

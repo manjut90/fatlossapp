@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useRef,
 } from 'react';
+import { Alert } from 'react-native';
 
 import { supabase } from '../services/supabase';
 import { addFood } from '../services/food';
@@ -49,6 +50,7 @@ export function HealthProvider({ children }: any) {
   const [healthData, setHealthData] = useState(DEFAULT_HEALTH_DATA);
   const [initialized, setInitialized] = useState(false);
   const [pendingLevelUp, setPendingLevelUp] = useState(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const previousXPRef = useRef<number | null>(null);
 
   // ==========================================
@@ -57,6 +59,7 @@ export function HealthProvider({ children }: any) {
 
   const loadTodayData = useCallback(async () => {
     try {
+      setLoadError(null);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user?.id) return;
 
@@ -172,8 +175,11 @@ export function HealthProvider({ children }: any) {
       
       setHealthData(newHealthData);
     } catch (err) {
-  console.error(err);
-} finally {
+      console.error('[HealthContext] loadTodayData failed:', err);
+      setLoadError(
+        'Could not load your latest health data. Pull to refresh or check your connection.',
+      );
+    } finally {
       setInitialized(true);
     }
   }, []);
@@ -251,17 +257,22 @@ export function HealthProvider({ children }: any) {
   // ==========================================
 
   const addParsedCheckIn = async (parsed: any) => {
+    // Tracks which check-in types succeeded so XP/streak only reflect what
+    // actually persisted, and so the failure alert can name exactly what
+    // didn't save (instead of a generic "something went wrong").
+    type CheckInType = 'food' | 'water' | 'activity' | 'sleep';
+    const tasks: { type: CheckInType; promise: Promise<any> }[] = [];
+
     try {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user?.id) throw new Error('User not authenticated');
 
       const user_id = user.id;
-      const tasks: Promise<any>[] = [];
-      let xpAwarded = 0;
 
       if (parsed.calories > 0) {
-        tasks.push(
-          addFood({
+        tasks.push({
+          type: 'food',
+          promise: addFood({
             user_id,
             meal_name: parsed.meal_name || 'Meal',
             calories: parsed.calories || 0,
@@ -272,53 +283,131 @@ export function HealthProvider({ children }: any) {
             meal_type: parsed.meal_type || 'snack',
             created_at: new Date().toISOString(),
           }),
-        );
-        xpAwarded += XP_PER_CHECKIN.food;
+        });
       }
 
       if (parsed.water > 0) {
-        tasks.push(addWater(parsed.water * 1000, new Date().toISOString(), user_id));
-        xpAwarded += XP_PER_CHECKIN.water;
+        tasks.push({
+          type: 'water',
+          promise: addWater(parsed.water * 1000, new Date().toISOString(), user_id),
+        });
       }
 
       if (parsed.workout) {
-        tasks.push(
-          addActivity({
+        tasks.push({
+          type: 'activity',
+          promise: addActivity({
             user_id,
             activity_name: parsed.activity_name || 'Workout',
             duration: parsed.duration || 30,
             calories_burned: parsed.calories_burned || 0,
           }),
-        );
-        xpAwarded += XP_PER_CHECKIN.activity;
+        });
       }
 
       if (parsed.sleep > 0) {
-        tasks.push(
-          addSleep({
+        tasks.push({
+          type: 'sleep',
+          promise: addSleep({
             user_id,
             hours: parsed.sleep || 0,
             quality: parsed.quality || 'good',
             date: new Date().toISOString(),
           }),
-        );
-        xpAwarded += XP_PER_CHECKIN.sleep;
+        });
       }
 
-      if (tasks.length > 0) {
-        await Promise.all(tasks);
-        await updateDailyStreak(user_id);
+      if (tasks.length === 0) {
+        await loadTodayData();
+        return;
+      }
+
+      // allSettled (not all): one rejected log-type must not silently
+      // discard the others that actually succeeded.
+      const settled = await Promise.allSettled(tasks.map(t => t.promise));
+
+      const succeeded: CheckInType[] = [];
+      const failed: CheckInType[] = [];
+      settled.forEach((result, i) => {
+        const type = tasks[i].type;
+        // Service functions (addFood/addWater/addActivity/addSleep) catch
+        // their own errors and resolve with { success: false } instead of
+        // rejecting — a fulfilled promise alone does not mean the write
+        // happened. Both conditions are required.
+        if (result.status === 'fulfilled' && result.value?.success === true) {
+          succeeded.push(type);
+        } else {
+          failed.push(type);
+          const reason =
+            result.status === 'rejected' ? result.reason : result.value;
+          console.error(`[HealthContext] addParsedCheckIn: ${type} log failed:`, reason);
+        }
+      });
+
+      const xpAwarded = succeeded.reduce((sum, type) => sum + XP_PER_CHECKIN[type], 0);
+
+      // Streak/XP failures are independent of check-in failures — handle
+      // separately so one doesn't mask or block the other in logs/alerts.
+      let streakFailed = false;
+      let xpFailed = false;
+
+      if (succeeded.length > 0) {
+        try {
+          await updateDailyStreak(user_id);
+        } catch (streakErr) {
+          streakFailed = true;
+          console.error('[HealthContext] addParsedCheckIn: streak update failed:', streakErr);
+        }
       }
 
       if (xpAwarded > 0) {
-        await awardCheckInXp(xpAwarded, 'Daily Check-In', user_id);
+        try {
+          await awardCheckInXp(xpAwarded, 'Daily Check-In', user_id);
+        } catch (xpErr) {
+          xpFailed = true;
+          console.error('[HealthContext] addParsedCheckIn: XP award failed:', xpErr);
+        }
       }
 
-      // Reload fresh data from Supabase after saving
+      // Always refresh, success or partial failure, so the UI reflects what
+      // actually persisted rather than going stale relative to the DB.
       await loadTodayData();
 
+      if (failed.length > 0 || streakFailed || xpFailed) {
+        const label = (t: CheckInType) => t.charAt(0).toUpperCase() + t.slice(1);
+        if (succeeded.length === 0) {
+          // Total failure — caller's onSave/onSelect must not show a
+          // success toast or close the sheet, so this re-throws below.
+          Alert.alert(
+            'Check-in failed',
+            "Nothing saved. Check your connection and try again.",
+          );
+        } else {
+          Alert.alert(
+            'Partial save',
+            `${failed.map(label).join(', ') || 'Some data'} didn't save${
+              streakFailed || xpFailed ? ' (streak/XP may be out of sync)' : ''
+            }. ${succeeded.map(label).join(', ')} saved okay.`,
+          );
+        }
+      }
+
+      if (succeeded.length === 0 && failed.length > 0) {
+        throw new Error(`All check-in writes failed: ${failed.join(', ')}`);
+      }
+
     } catch (err) {
-      // silent
+      console.error('[HealthContext] addParsedCheckIn failed:', err);
+      if (tasks.length === 0) {
+        // Failed before any task was even built (e.g. auth lookup) —
+        // nothing else above has alerted yet.
+        Alert.alert(
+          'Check-in failed',
+          "Something didn't save. Check your connection and try again.",
+        );
+      }
+      throw err; // surfaces to CheckInScreen's sheets so they don't close
+                 // or show a success toast on a no-op
     }
   };
 
@@ -349,6 +438,7 @@ export function HealthProvider({ children }: any) {
       value={{
         healthData,
         initialized,
+        loadError,
         pendingLevelUp,
         clearPendingLevelUp,
         updateHealthData,

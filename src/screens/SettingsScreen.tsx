@@ -82,9 +82,9 @@
          </Card> 
  
          <Card title="Account Security" icon={<Lock size={16} color="#8B7CFF"/>}> 
-           <Row label="Change Password" sub="Requires OTP verification" onPress={()=>navigation.navigate('ChangePassword')}/> 
-           <Row label="Email Verification" sub="Verify your email address" onPress={()=>navigation.navigate('EmailVerify')}/> 
-           <Row label="Phone Verification" sub="Add or verify phone number" onPress={()=>navigation.navigate('PhoneVerify')}/> 
+           <Row label="Change Password" sub="Requires OTP verification" onPress={()=>Alert.alert('Coming Soon','Password change will be available soon.')}/> 
+           <Row label="Email Verification" sub="Verify your email address" onPress={()=>Alert.alert('Coming Soon','Email verification will be available soon.')}/> 
+           <Row label="Phone Verification" sub="Add or verify phone number" onPress={()=>Alert.alert('Coming Soon','Phone verification will be available soon.')}/> 
            <Toggle label="Two-Factor Auth" sub="Coming soon" value={false} onChange={()=>{}}/> 
          </Card> 
  
@@ -105,7 +105,7 @@
  
          <Card title="Privacy" icon={<Shield size={16} color="#8B7CFF"/>}> 
            <Toggle label="Private Account" sub={priv?'Only followers see your posts':'Your posts are public'} value={priv} onChange={setPriv}/> 
-           <Row label="Blocked Users" sub="Manage blocked accounts" onPress={()=>navigation.navigate('BlockedUsers')}/> 
+           <Row label="Blocked Users" sub="Manage blocked accounts" onPress={()=>Alert.alert('Coming Soon','Blocked user management will be available soon.')}/> 
          </Card> 
  
          <Card title="About" icon={<Info size={16} color="#8B7CFF"/>}> 
@@ -115,8 +115,8 @@
          </Card> 
  
          <Card title="Help & Support" icon={<HelpCircle size={16} color="#8B7CFF"/>}> 
-           <Row label="Report a Problem" onPress={()=>navigation.navigate('ReportProblem')}/> 
-           <Row label="Frequently Asked Questions" onPress={()=>navigation.navigate('FAQ')}/> 
+           <Row label="Report a Problem" onPress={()=>Alert.alert('Coming Soon','URL will be added soon.')}/> 
+           <Row label="Frequently Asked Questions" onPress={()=>Alert.alert('Coming Soon','URL will be added soon.')}/> 
          </Card> 
  
          <TouchableOpacity style={ss.logoutBtn} onPress={logout}> 

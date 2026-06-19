@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getLocalDateString } from '../utils/localDate';
 
 async function getCurrentUserId() {
   const {
@@ -18,18 +19,14 @@ async function getCurrentUserId() {
 }
 
 function toDateOnly(value: string) {
-  return new Date(value)
-    .toISOString()
-    .split('T')[0];
+  return getLocalDateString(new Date(value));
 }
 
 function getYesterdayDate(today: string) {
-  const day =
-    new Date(`${today}T00:00:00.000Z`);
-  day.setUTCDate(day.getUTCDate() - 1);
-  return day
-    .toISOString()
-    .split('T')[0];
+  const [y, m, d] = today.split('-').map(Number);
+  const day = new Date(y, m - 1, d);
+  day.setDate(day.getDate() - 1);
+  return getLocalDateString(day);
 }
 
 export async function updateDailyStreak(
@@ -40,10 +37,7 @@ export async function updateDailyStreak(
       user_id ||
       (await getCurrentUserId());
 
-    const today =
-      new Date()
-        .toISOString()
-        .split('T')[0];
+    const today = getLocalDateString();
 
     const { data, error } =
       await supabase

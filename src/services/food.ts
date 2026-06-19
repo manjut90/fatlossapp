@@ -37,14 +37,14 @@ export async function addFood(
       input.user_id ||
       (await getCurrentUserId());
 
-    const { error } =
+    const { error, data } = 
       await supabase
-        .from('food_logs')
+        .from('food_logs')  
         .insert({
           user_id,
           meal_name:
             input.meal_name,
-          calories:
+          calories: 
             input.calories,
           protein:
             input.protein,
@@ -56,10 +56,13 @@ export async function addFood(
           created_at:
             input.created_at ||
             new Date().toISOString(),
-        });
+        })
+        .select();
+
+    console.log('[DEBUG] addFood insert result:', { error, data });  
 
     if (error) {
-      throw error;
+      throw error; 
     }
 
     return {

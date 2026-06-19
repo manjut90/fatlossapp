@@ -5,6 +5,7 @@ import { supabase } from '../services/supabase';
 import { awardCheckInXp } from '../services/xp';
 import { updateDailyStreak } from '../services/streaks';
 import { getFallbackTemplate } from '../constants/missionTemplates';
+import { getLocalDateString } from '../utils/localDate';
 
 export interface Mission {
   title: string;
@@ -34,7 +35,7 @@ export function useDailyMission(): UseDailyMissionResult {
   const [mission, setMission] = useState<DailyMission | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
 
   useEffect(() => {
     if (!user?.id) return;

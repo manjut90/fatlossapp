@@ -15,7 +15,7 @@ import PostViewerModal from '../components/profile/PostViewerModal';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
-import { getLevel } from '../services/level';
+import { getLevelFromXP } from '../constants/levels';
 import { achievementOrchestrator } from './gamification/services/AchievementOrchestrator';
 import { useGamificationStore } from './gamification/store/useGamificationStore';
 
@@ -168,7 +168,7 @@ const handleBookmark = async () => {
           return ( 
             <View style={{paddingHorizontal:6,paddingVertical:2,borderRadius:6,backgroundColor:rank.bg,marginLeft:6,flexDirection:'row',gap:3}}> 
               <Text style={{fontSize:9,fontWeight:'800',color:rank.color}}>{rank.label}</Text> 
-              <Text style={{fontSize:9,fontWeight:'600',color:rank.color}}>Lv.{getLevel(post.profiles?.xp||0)}</Text> 
+              <Text style={{fontSize:9,fontWeight:'600',color:rank.color}}>Lv.{getLevelFromXP(post.profiles?.xp||0).level}</Text> 
             </View> 
           ); 
         })()} 
@@ -267,7 +267,7 @@ const ReelItem = ({ post }: any) => {
               </Text>
               {(()=>{
                 const rank = getRankBadge(post.profiles?.xp || 0);
-                const level = getLevel(post.profiles?.xp || 0);
+                const level = getLevelFromXP(post.profiles?.xp || 0).level;
                 return(
                   <View style={{flexDirection:'row',alignItems:'center',gap:4}}>
                     <View style={{paddingHorizontal:6,paddingVertical:1,borderRadius:6,backgroundColor:rank.bg}}>

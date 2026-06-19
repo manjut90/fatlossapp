@@ -36,6 +36,18 @@ function getFallback(date: string) {
   return FALLBACKS[day % FALLBACKS.length];
 }
 
+function isValidMissionPayload(data: any): boolean {
+  if (!data || !Array.isArray(data.missions) || data.missions.length === 0) return false;
+  if (typeof data.coach_message !== "string" || !data.coach_message.trim()) return false;
+  const validCategories = ["movement", "hydration", "nutrition"];
+  return data.missions.every((m: any) =>
+    typeof m.title === "string" && m.title.trim() &&
+    typeof m.description === "string" &&
+    validCategories.includes(m.category) &&
+    typeof m.xp === "number" && m.xp > 0
+  );
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS });
@@ -139,7 +151,12 @@ Respond with RAW JSON only. No markdown. No explanation.
         const raw = ai.choices[0].message.content
           .replace(/```json|```/g, "")
           .trim();
-        missionData = JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (isValidMissionPayload(parsed)) {
+          missionData = parsed;
+        } else {
+          console.error("AI returned invalid mission shape, using fallback:", parsed);
+        }
       }
     } catch (e) {
       console.error("OpenAI failed, using fallback:", e);
