@@ -1,8 +1,8 @@
 import * as Notifications from 'expo-notifications';
 
 import * as Device from 'expo-device';
-
 import { Platform } from 'react-native';
+import { supabase } from '../services/supabase';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -12,6 +12,31 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
+
+async function savePushToken(token: string) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    console.log('No user found, skipping push token save.');
+    return;
+  }
+
+  const { error } = await supabase.from('push_tokens').upsert(
+    {
+      user_id: user.id,
+      token: token,
+      platform: Platform.OS,
+    },
+    { onConflict: 'token' }
+  );
+
+  if (error) {
+    console.error('❌ Error saving push token:', error);
+  } else {
+    console.log('✅ Push token saved');
+  }
+}
 
 console.log('DEVICE IS DEVICE:', Device.isDevice);
 export async function registerForPushNotificationsAsync() {
@@ -29,17 +54,31 @@ console.log(
 
     let finalStatus = existingStatus;
     if (existingStatus !== 'granted') {
-      const permissions = await Notifications.requestPermissionsAsync();
-      const status = (permissions as any).status;
-      finalStatus = status;
-    }
+       const permissions = await Notifications.requestPermissionsAsync();
+       const status = (permissions as any).status;
+       finalStatus = status;
+     }
 
-    if (
-      finalStatus !== 'granted'
-    ) {
-      return;
-    }
+     if (
+       finalStatus !== 'granted'
+     ) {
+       alert('Failed to get push token for push notification!');
+       return;
+     }
+   }
+
+  try {
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    console.log('Expo Push Token:', token);
+    await savePushToken(token);
+  } catch (e) {
+    console.error('❌ Failed to get or save push token', e);
   }
+
+  Notifications.addPushTokenListener(async (newToken) => {
+    console.log('Push token refreshed:', newToken.data);
+    await savePushToken(newToken.data);
+  });
 
   if (Platform.OS === 'android') {
     Notifications.setNotificationChannelAsync(
