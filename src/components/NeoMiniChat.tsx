@@ -1,7 +1,10 @@
-import React,{useState,useRef} from 'react'; 
+import React,{useState,useRef,useEffect} from 'react'; 
 import {View,Text,Image,StyleSheet,TextInput,TouchableOpacity,ScrollView,KeyboardAvoidingView,Platform,Modal} from 'react-native';
 import {X,Send} from 'lucide-react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context'; 
+import { supabase } from '../services/supabase';
+import { useAuth } from '../context/AuthContext';
+import { getLocalDateString } from '../utils/localDate';
 
 type Msg={role:'user'|'assistant';text:string;}; 
 
@@ -9,12 +12,35 @@ type Props={visible:boolean;onClose:()=>void;};
 
 export default function NeoMiniChat({visible,onClose}:Props){ 
   const insets=useSafeAreaInsets(); 
+  const { user, profile } = useAuth();
   const [msgs,setMsgs]=useState<Msg[]>([ 
     {role:'assistant',text:"Hey! I'm Neo. Ask me anything about your fitness, nutrition, or goals."} 
   ]); 
   const [input,setInput]=useState(''); 
   const [loading,setLoading]=useState(false); 
+  const [todayMission,setTodayMission]=useState<any>(null);
   const scrollRef=useRef<ScrollView>(null); 
+
+  useEffect(() => {
+    if (!user?.id || !visible) return;
+    const fetchMission = async () => {
+      try {
+        const today = getLocalDateString();
+        const { data, error } = await supabase
+          .from('daily_missions')
+          .select('missions, coach_message, completed_missions')
+          .eq('user_id', user.id)
+          .eq('date', today)
+          .maybeSingle();
+        if (!error && data) {
+          setTodayMission(data);
+        }
+      } catch (err) {
+        console.error('Failed to load today mission in NeoMiniChat:', err);
+      }
+    };
+    fetchMission();
+  }, [user?.id, visible]);
 
   const send=async()=>{ 
     if(!input.trim()||loading) return; 
@@ -23,22 +49,47 @@ export default function NeoMiniChat({visible,onClose}:Props){
     setMsgs(p=>[...p,{role:'user',text:userMsg}]); 
     setLoading(true); 
     try{ 
-      const key=process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY; 
-      const history=msgs.slice(-6).map(m=>({role:m.role,content:m.text})); 
-      const res=await fetch('https://api.anthropic.com/v1/messages',{ 
-        method:'POST', 
-        headers:{'Content-Type':'application/json','x-api-key':key||'','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, 
-        body:JSON.stringify({ 
-          model:'claude-haiku-4-5-20251001', 
-          max_tokens:300, 
-          system:'You are Neo, a witty Gen-Z fitness coach. Keep responses short, direct, under 3 sentences. No fluff.', 
-          messages:[...history,{role:'user',content:userMsg}], 
-        }), 
-      }); 
-      const data=await res.json(); 
+      const history=msgs.slice(-6).map(m=>({role:m.role === 'assistant' ? 'assistant' : 'user',content:m.text})); 
+      
+      const completed = todayMission?.completed_missions || [];
+      const missionContext = todayMission?.missions
+        ? todayMission.missions.map((m: any, idx: number) => {
+            const status = completed.includes(idx) ? '✓ completed' : 'pending';
+            return `${idx + 1}. ${m.title} - ${m.description} (${status})`;
+          }).join('\n')
+        : 'None';
+
+      const name = profile?.full_name?.split(' ')[0] || 'there';
+      const goal = profile?.goal || profile?.goals?.[0] || 'fitness';
+      const weight = profile?.current_weight || profile?.weight || '70';
+
+      const systemPrompt = `You are Neo, a witty Gen-Z fitness coach. You are talking to ${name} whose goal is ${goal} and weight is ${weight}kg. Keep responses short, direct, under 3 sentences. No fluff.
+
+TODAY'S MISSIONS (you assigned these):
+${missionContext}
+${todayMission?.coach_message ? `COACH INTENT: ${todayMission.coach_message}` : ''}
+
+RULES:
+- Reinforce pending missions when user asks what to do.
+- Congratulate completed missions.
+- Never contradict active missions.`;
+
+      const { data, error } = await supabase.functions.invoke('coach-chat', {
+        body: {
+          messages: [...history, { role: 'user', content: userMsg }],
+          system: systemPrompt,
+          max_tokens: 300,
+        }
+      });
+
+      if (error || !data) {
+        throw error || new Error('Failed to get response from coach-chat');
+      }
+
       const reply=data?.content?.[0]?.text?.trim()||'Sorry, try again.'; 
       setMsgs(p=>[...p,{role:'assistant',text:reply}]); 
-    }catch{ 
+    }catch(err){ 
+      console.error(err);
       setMsgs(p=>[...p,{role:'assistant',text:'Network error. Try again.'}]); 
     }finally{ 
       setLoading(false); 

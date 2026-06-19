@@ -1,15 +1,51 @@
+import { useState, useEffect } from 'react';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
+import { getLocalDateString } from '../utils/localDate';
 
 export default function useCoachChat() {
   const { healthData } = useHealth();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
+  const [todayMission, setTodayMission] = useState<any>(null);
+
+  // Lightweight mission fetch — read-only, no generation, no fallback
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchMission = async () => {
+      try {
+        const today = getLocalDateString();
+        const { data } = await supabase
+          .from('daily_missions')
+          .select('missions, coach_message, completed_missions')
+          .eq('user_id', user.id)
+          .eq('date', today)
+          .maybeSingle();
+        if (data) setTodayMission(data);
+      } catch (e) {
+        // Non-critical — coach works without mission context
+      }
+    };
+    fetchMission();
+  }, [user?.id]);
+
+  const buildMissionBlock = (): string => {
+    if (!todayMission?.missions?.length) return '';
+    const completed = todayMission.completed_missions || [];
+    const lines = todayMission.missions.map((m: any, i: number) => {
+      const status = completed.includes(i) ? '✓ completed' : 'pending';
+      return `- ${m.title}: ${m.description} (${status})`;
+    });
+    return `TODAY'S MISSIONS (you assigned these):
+${lines.join('\n')}
+${todayMission.coach_message ? `COACH INTENT: ${todayMission.coach_message}` : ''}
+`;
+  };
 
   const buildSystemPrompt = () => {
     const name = profile?.full_name?.split(' ')[0] || 'there';
-    const goal = profile?.goal || 'fat loss';
-    const weight = profile?.weight_kg || 70;
+    const goal = profile?.goal || profile?.goals?.[0] || 'fat loss';
+    const weight = profile?.current_weight || profile?.weight || profile?.weight_kg || 70;
     const targetCalories = profile?.target_calories || 2000;
     const targetProtein = profile?.target_protein || 150;
 
@@ -47,12 +83,15 @@ TODAY'S DATA:
 - Daily score: ${dailyScore}%
 - Current streak: ${streak} days
 
+${buildMissionBlock()}
 YOUR RULES:
 1. Always use the user's real data when giving advice
-2. Be specific and concise — max 3-4 sentences
-3. Use emojis naturally
-4. Never say you are an AI — you ARE their coach
-5. Always end with one specific action they can take right now`;
+2. If missions are active, reinforce pending ones and congratulate completed ones
+3. Never suggest actions that contradict active missions
+4. Be specific and concise — max 3-4 sentences
+5. Use emojis naturally
+6. Never say you are an AI — you ARE their coach
+7. Always end with one specific action they can take right now`;
   };
 
   const processMessage = async (
@@ -60,11 +99,6 @@ YOUR RULES:
     conversationHistory: { role: string; content: string }[] = []
   ): Promise<string> => {
     try {
-      if (!process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY) {
-        return buildFallbackReply(text);
-      }
-
-      const claudeKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
       const messages = [
         ...conversationHistory.slice(-6).map(m => ({
           role: m.role === 'assistant' ? 'assistant' : 'user',
@@ -72,23 +106,14 @@ YOUR RULES:
         })),
         { role: 'user', content: text },
       ];
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': claudeKey || '',
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
-          system: buildSystemPrompt(),
+      const { data, error } = await supabase.functions.invoke('coach-chat', {
+        body: {
           messages,
-        }),
+          system: buildSystemPrompt(),
+          max_tokens: 400,
+        }
       });
-      if (!res.ok) { return buildFallbackReply(text); }
-      const data = await res.json();
+      if (error || !data) { return buildFallbackReply(text); }
       const reply = data?.content?.[0]?.text?.trim() || '';
       if (!reply) return buildFallbackReply(text);
 
