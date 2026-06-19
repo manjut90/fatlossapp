@@ -41,7 +41,6 @@ import {
   ThemeProvider,
 } from './src/context/ThemeProvider';
 
-/*
 function NotificationInitializer() {
   useEffect(() => {
     console.log('🚀 NotificationInitializer mounted');
@@ -65,7 +64,6 @@ function NotificationInitializer() {
 
   return null;
 }
-  */
 export default function App() {
   return (
     <GestureHandlerRootView
@@ -74,10 +72,10 @@ export default function App() {
       <AuthProvider>
         <OnboardingProvider>
           <HealthProvider>
-            <ThemeProvider>
-  <Navigation />
-</ThemeProvider>
-          </HealthProvider>
+             <ThemeProvider>
+               <Navigation />
+             </ThemeProvider>
+           </HealthProvider>
         </OnboardingProvider>
       </AuthProvider>
     </GestureHandlerRootView>
