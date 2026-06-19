@@ -4,6 +4,12 @@ import { MissionCard } from '../components/MissionCard';
 import { useHealth } from '../context/HealthContext';
 import { getWeatherTemp } from '../services/weather';
 import { getLevelFromXP } from '../constants/levels';
+import {
+  calculateBMR,
+  calculateTDEE,
+  calculateGoalCalories,
+  calculateMacros,
+} from '../utils/healthCalculations';
 
 import React, {
   useCallback,
@@ -54,6 +60,21 @@ import { LevelUpModal } from '../components/LevelUpModal';
 import { updateLastCelebratedLevel } from '../services/progress';
 import { AchievementUnlockedModal } from '../components/AchievementUnlockedModal';
 import { useGamificationStore } from './gamification/store/useGamificationStore';
+
+// ── Strip markdown formatting from AI responses ──
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')   // **bold**
+    .replace(/\*(.+?)\*/g, '$1')       // *italic*
+    .replace(/__(.+?)__/g, '$1')       // __bold__
+    .replace(/_(.+?)_/g, '$1')         // _italic_
+    .replace(/~~(.+?)~~/g, '$1')       // ~~strikethrough~~
+    .replace(/`(.+?)`/g, '$1')         // `code`
+    .replace(/^#+\s+/gm, '')           // # headings
+    .replace(/^[-*]\s+/gm, '• ')       // bullet lists
+    .replace(/^\d+\.\s+/gm, '')        // numbered lists
+    .trim();
+}
 
 // ── PROGRESS RING component ──
 function ProgressRing({
@@ -148,7 +169,7 @@ export default function HomeScreen() {
     const fetchAiSummary = async () => {
       setSummaryLoading(true);
       try {
-        const prompt = `You are Neo, a world-class fitness and nutrition expert. The user's stats today: calories=${healthData.todayCalories}, protein=${healthData.todayProtein}g, water=${healthData.todayWater}ml, sleep=${healthData.todaySleep}h, workout=${healthData.todayWorkout}, goal=${userGoal}, current weight=${currentWeight}kg, target weight=${targetWeight}kg. Give ONE powerful, specific, data-driven insight in max 20 words. Be direct, specific to their numbers, no fluff.`;
+        const prompt = `You are Neo, a world-class fitness and nutrition expert. The user's stats today: calories=${healthData.todayCalories}, protein=${healthData.todayProtein}g, water=${healthData.todayWater}ml, sleep=${healthData.todaySleep}h, workout=${healthData.todayWorkout}, goal=${userGoal}, current weight=${currentWeight}kg, target weight=${targetWeight}kg. Give ONE powerful, specific, data-driven insight in max 20 words. Be direct, specific to their numbers, no fluff. Do NOT use any markdown formatting — no bold, no italics, no asterisks, no bullet points. Plain text only.`;
 
         const { data, error } = await supabase.functions.invoke('coach-chat', {
           body: {
@@ -160,7 +181,7 @@ export default function HomeScreen() {
         if (error || !data) {
           throw error || new Error('Failed to get summary from coach-chat');
         }
-        const summary = data?.content?.[0]?.text?.trim() || getPrimeStateSummary();
+        const summary = stripMarkdown(data?.content?.[0]?.text?.trim() || '') || getPrimeStateSummary();
         setAiSummary(summary);
 
       } catch (error) {
@@ -196,18 +217,27 @@ export default function HomeScreen() {
   const handleImprovePress = () => navigation.navigate('CheckIn');
 
   const dailyScore = healthData?.dailyScore || 0;
-  const caloriesGoal = profile?.target_calories || 2000;
-  const proteinGoal = profile?.target_protein || 150;
+  const currentWeight = parseFloat(profile?.current_weight || profile?.weight) || 70;
+  const targetWeight = parseFloat(profile?.target_weight) || 0;
+  const userGoal = profile?.goals?.[0] || 'fat_loss';
+  const gender = (profile?.gender || '').toLowerCase().trim();
+
+  // Compute nutrition targets from profile data (same approach as AICoachScreen)
+  const bmrGender = gender === 'female' || gender === 'woman' ? 'Female' : 'Male';
+  const profileHeight = parseFloat(profile?.height) || 170;
+  const activityLevel = profile?.activity_level || 'Moderately Active';
+  const bmr = calculateBMR({ weight: currentWeight, height: profileHeight, gender: bmrGender });
+  const tdee = calculateTDEE({ bmr, activityLevel });
+  const computedCalories = calculateGoalCalories({ tdee, goal: userGoal });
+  const computedMacros = calculateMacros({ calories: computedCalories, weight: currentWeight, goal: userGoal });
+
+  const caloriesGoal = parseFloat(profile?.target_calories) || computedCalories;
+  const proteinGoal = parseFloat(profile?.target_protein) || computedMacros.protein;
+  const carbsGoal = parseFloat(profile?.target_carbs) || computedMacros.carbs;
+  const fatsGoal = parseFloat(profile?.target_fats) || computedMacros.fats;
   const waterGoal = 2500;
   const sleepGoal = 8;
-  const currentWeight = profile?.current_weight || 0;
-  const targetWeight = profile?.target_weight || 0;
-  const userGoal = profile?.goals?.[0] || 'fat_loss';
-
-  const gender = (profile?.gender || '').toLowerCase().trim();
   const fiberGoal = gender === 'male' || gender === 'man' ? 38 : 25;
-  const carbsGoal = 250;
-  const fatsGoal = 80;
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const livePulse = useRef(new Animated.Value(0)).current;
@@ -309,7 +339,6 @@ export default function HomeScreen() {
 
   const getPrimeStateSummary = () => {
     const { todayProtein, todayWater, todayWorkout } = healthData;
-    const proteinGoal = profile?.target_protein || 150;
 
     if (todayProtein > 0 && todayProtein < proteinGoal * 0.5) {
       return "Protein critically low. Add 2 eggs or 100g chicken to your next meal.";
