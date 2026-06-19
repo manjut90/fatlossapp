@@ -9,17 +9,24 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "jsEngine": "hermes",
-  "plugins": [
-  [
-    "expo-location",
-    {
-      "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
-    }
-  ],
-
-  "expo-font",
-  "expo-notifications"
-],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ],
+      "expo-font",
+      "expo-notifications",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "lfgo"
+        }
+      ]
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",

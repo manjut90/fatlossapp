@@ -44,3 +44,5 @@ yarn-error.*
 
 LFGO-App-Icon-Pack/
 LFGO-App-Icon-Pack.zip
+
+.env.local

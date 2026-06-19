@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 
 //import {
@@ -40,6 +39,26 @@ import {
 import {
   ThemeProvider,
 } from './src/context/ThemeProvider';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: 'https://78e50ccac6ad04a8a884c27b4304051a@o4511592683929600.ingest.us.sentry.io/4511592684126208',
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Enable Logs
+  enableLogs: true,
+
+  // Configure Session Replay
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1,
+  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
 
 function NotificationInitializer() {
   useEffect(() => {
@@ -64,7 +83,7 @@ function NotificationInitializer() {
 
   return null;
 }
-export default function App() {
+export default Sentry.wrap(function App() {
   return (
     <GestureHandlerRootView
       style={{ flex: 1 }}
@@ -80,4 +99,4 @@ export default function App() {
       </AuthProvider>
     </GestureHandlerRootView>
   );
-}
+});
