@@ -100,10 +100,6 @@ export default function MainTabs() {
   const navigation = useNavigation();
   const [neoVisible, setNeoVisible] = useState(false);
 
-  const handleMediaPress = () => {
-    navigation.navigate('CreatePost');
-  };
-
   return (
     <View style={{ flex: 1 }}>
       <Tab.Navigator
@@ -121,7 +117,7 @@ export default function MainTabs() {
       </Tab.Navigator>
       <FloatingActionButton
         onNeoPress={() => setNeoVisible(true)}
-        onMediaPress={handleMediaPress}
+        onMediaPress={() => navigation.navigate('CreatePost')}
       />
       <NeoMiniChat visible={neoVisible} onClose={() => setNeoVisible(false)} />
     </View>

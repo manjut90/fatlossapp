@@ -12,6 +12,7 @@ import { supabase } from '../services/supabase';
 import { useHealth } from '../context/HealthContext';
 import { useProgressMetrics } from '../hooks/useProgressMetrics';
 import { useHistoricalData } from '../hooks/useHistoricalData';
+import { getLevelFromXP } from '../constants/levels';
 
 const MOTIVATIONAL_LINES = [
   "The only bad workout is the one that didn't happen.",
@@ -48,29 +49,67 @@ export default function ProgressScreen() {
     ).start();
   }, []);
 
-  useFocusEffect(useCallback(() => { refreshHealthData(); }, [refreshHealthData]));
+  useFocusEffect(
+    useCallback(() => {
+      refreshHealthData();
+      if (profile?.id) {
+        fetchAISummary(false);
+      }
+    }, [refreshHealthData, profile?.id, period])
+  );
+
+  useEffect(() => {
+    if (profile?.id) {
+      fetchAISummary(false);
+    }
+  }, [profile?.id, period]);
 
   const firstName = profile?.full_name?.split(' ')[0] || 'Champ';
   const goal = profile?.goal || profile?.goals?.[0] || 'fat_loss';
-  const startWeight = parseFloat(profile?.current_weight || '0') || parseFloat(profile?.weight || '0') || parseFloat(String(currentWeight)) || 0;
+  
+  const startWeight = parseFloat(profile?.initial_weight || '0')
+    || (firstWeightEntry ? parseFloat(String(firstWeightEntry.weight)) : 0)
+    || parseFloat(profile?.current_weight || '0')
+    || parseFloat(String(currentWeight))
+    || 0;
+    
   const currWeight = parseFloat(String(currentWeight)) || parseFloat(profile?.current_weight || '0') || 0;
-  const goalWeight = parseFloat(profile?.target_weight || '0') > 0
+  
+  const targetWeight = parseFloat(profile?.target_weight || '0') > 0
     ? parseFloat(profile?.target_weight || '0')
     : parseFloat(profile?.current_weight || '0') > 0
       ? Math.max(parseFloat(profile?.current_weight || '0') - 5, 50)
-      : '--';
-  const targetWeight = parseFloat(profile?.target_weight || '0') || 65;
+      : 65;
+  const goalWeight = targetWeight;
   const weightDiff = parseFloat((startWeight - currWeight).toFixed(1));
   const isLoss = goal === 'fat_loss' ? weightDiff >= 0 : weightDiff <= 0;
   const weightDiffAbs = Math.abs(weightDiff);
   const diffColor = isLoss ? '#6EE7A0' : '#FFAD6B';
   const weeklyDiff = parseFloat((metrics?.overallMetrics?.weeklyLossRate || 0).toFixed(2));
-  const pct = Math.min(100, Math.max(0, Math.round(metrics?.overallMetrics?.percentageComplete || 0)));
-  const weeksLeft = Math.ceil(metrics?.overallMetrics?.weeksRemaining || 0);
-  const kgLeft = Math.abs(parseFloat((currWeight - targetWeight).toFixed(1)));
+
+  const hasReachedTarget = goal === 'fat_loss' ? currWeight <= targetWeight : currWeight >= targetWeight;
+
   const journeyPct = startWeight !== targetWeight
     ? Math.min(100, Math.max(0, ((startWeight - currWeight) / (startWeight - targetWeight)) * 100))
-    : 50;
+    : 100;
+
+  const pct = hasReachedTarget ? 100 : Math.round(journeyPct);
+  const weeksLeft = Math.ceil(metrics?.overallMetrics?.weeksRemaining || 0);
+  const kgLeft = hasReachedTarget ? 0 : Math.abs(parseFloat((currWeight - targetWeight).toFixed(1)));
+
+  // XP & Levels
+  const userXp = profile?.xp || 0;
+  const levelInfo = getLevelFromXP(userXp);
+  const userLevel = levelInfo.level;
+  const currentLevelMinXp = levelInfo.currentLevelXp;
+  const nextLevelMinXp = levelInfo.nextLevelXp || currentLevelMinXp;
+  const xpInCurrentLevel = userXp - currentLevelMinXp;
+  const xpToNextLevelRange = nextLevelMinXp - currentLevelMinXp;
+
+  // Today's Progress
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayEntry = dailyData?.find(d => d.date?.startsWith(todayStr));
+  const hasTodayData = todayEntry && ((todayEntry.protein || 0) > 0 || (todayEntry.water || 0) > 0 || (todayEntry.sleep || 0) > 0);
 
   const periodDays = period === 'weekly' ? 7 : period === 'monthly' ? 30 : (dailyData?.length || 7);
   const periodData = (dailyData || []).slice(-periodDays);
@@ -228,131 +267,8 @@ const renderStreakDots = () => {
             ))}
           </View>
 
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <TrendingUp size={18} color="#F7C873" />
-              <Text style={styles.sectionTitle}>OVERALL PROGRESS</Text>
-            </View>
-            <View style={styles.weightChangeRow}>
-              <Text style={[styles.weightChangeBig, { color: periodColor }]}>{periodWeightDiff >= 0 ? '-' : '+'}{periodDiffAbs} kg</Text>
-            </View>
-            <View style={styles.weeklyRow}>
-              {isLoss ? <TrendingDown size={14} color={periodColor} /> : <TrendingUp size={14} color={periodColor} />}
-              <Text style={[styles.weeklyText, { color: periodColor }]}>{` ${periodDiffAbs} kg ${periodWeightDiff >= 0 ? 'lost' : 'gained'} — ${periodLabel}`}</Text>
-            </View>
-            <View style={styles.journeyWrap}>
-              <View style={styles.journeyLabelRow}>
-                <Text style={styles.journeyLabel}>{`Start\n`}<Text style={styles.journeyValue}>{startWeight} kg</Text></Text>
-                <Text style={[styles.journeyLabel, { textAlign: 'center' }]}>{`Now\n`}<Text style={[styles.journeyValue, { color: '#8B7CFF' }]}>{currWeight} kg</Text></Text>
-                <Text style={[styles.journeyLabel, { textAlign: 'right' }]}>{`Goal\n`}<Text style={styles.journeyValue}>{goalWeight} kg</Text></Text>
-              </View>
-              <View style={styles.journeyTrack}>
-                <LinearGradient colors={['#8B7CFF', '#FF8FA3']} style={[styles.journeyFill, { width: `${journeyPct}%` }]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
-                <View style={[styles.journeyDot, { left: `${journeyPct}%` }]} />
-              </View>
-            </View>
-          </View>
-
-          {/* GOAL PROGRESS BAR */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>FITNESS GOAL PROGRESS</Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC' }}>{pct}% complete</Text>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#8B7CFF' }}>{kgLeft} kg to go</Text>
-            </View>
-            <View style={{ height: 14, backgroundColor: '#1A2235', borderRadius: 7, overflow: 'hidden', marginBottom: 10 }}>
-              <LinearGradient colors={['#8B7CFF', '#FF8FA3']} style={{ width: `${pct}%`, height: '100%', borderRadius: 7 }} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
-            </View>
-            <Text style={{ fontSize: 12, color: '#6B7280', lineHeight: 18 }}>
-              {weeksLeft > 0
-                ? `At your current pace, you'll hit your target in ~${weeksLeft} weeks. Stay consistent—you're on track.`
-                : 'You have reached your target weight. Amazing work—now focus on maintaining it!'}
-            </Text>
-          </View>
-
-          {/* WEIGHT TREND */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>{`WEIGHT TREND — ${periodLabel.toUpperCase()}`}</Text>
-            </View>
-            {dailyData && dailyData.length > 0 ? (
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 80 }}>
-                {periodData.slice(-Math.min(periodDays, 12)).map((d, i) => {
-                  const vals = periodData.slice(-Math.min(periodDays, 12)).map(x => x.weight || currWeight).filter(Boolean);
-                  const minW = Math.min(...vals) - 1;
-                  const maxW = Math.max(...vals) + 1;
-                  const barH = maxW !== minW ? Math.round(((d.weight || currWeight) - minW) / (maxW - minW) * 60) + 10 : 40;
-                  return (
-                    <View key={i} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
-                      <Text style={{ fontSize: 9, color: '#6B7280' }}>{(d.weight || currWeight).toFixed(1)}</Text>
-                      <View style={{ width: '80%', height: barH, backgroundColor: '#B8A8FF', borderRadius: 4, opacity: 0.65 + i * 0.05 }} />
-                      <Text style={{ fontSize: 9, color: '#6B7280' }}>{new Date(d.date).getDate()}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : (
-              <Text style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', paddingVertical: 20 }}>
-                Log your weight for at least two days to see your trend.
-              </Text>
-            )}
-          </View>
-
-          {/* WEEKLY STREAK */}
-          {renderStreakDots()}
-
-          {/* XP & LEVEL */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>XP & LEVEL</Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#F7F8FC' }}>Level {healthData.level || 1}</Text>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#8B7CFF' }}>{healthData.xp || 0} / {healthData.xpToNextLevel || 100} XP</Text>
-            </View>
-            <View style={{ height: 12, backgroundColor: '#1A2235', borderRadius: 6, overflow: 'hidden' }}>
-              <LinearGradient
-                colors={['#8B7CFF', '#FF8FA3']}
-                style={{ width: `${Math.min(100, ((healthData.xp || 0) / (healthData.xpToNextLevel || 100)) * 100)}%`, height: '100%' }}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-            </View>
-          </View>
-
-          {/* NUTRITION TRENDS */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>{`NUTRITION TRENDS — ${periodLabel.toUpperCase()}`}</Text>
-            </View>
-            {[
-              { label: 'Protein', key: 'protein', color: '#8B7CFF', unit: 'g', target: parseFloat(profile?.target_protein) || 150 },
-              { label: 'Water', key: 'water', color: '#4AA9FF', unit: 'L', target: 2.5, divisor: 1000 },
-              { label: 'Sleep', key: 'sleep', color: '#FFAD42', unit: 'h', target: 8 },
-            ].map(m => {
-              const last7 = periodData;
-              const avg = last7.length
-                ? last7.reduce((s, d) => s + ((d[m.key] || 0) / (m.divisor || 1)), 0) / last7.length
-                : 0;
-              const pctT = Math.min(100, Math.round((avg / m.target) * 100));
-              return (
-                <View key={m.label} style={{ marginBottom: 14 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC' }}>{m.label}</Text>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: m.color }}>{avg.toFixed(1)}{m.unit} / {m.target}{m.unit}</Text>
-                  </View>
-                  <View style={{ height: 10, backgroundColor: '#1A2235', borderRadius: 5, overflow: 'hidden' }}>
-                    <View style={{ width: `${pctT}%`, height: '100%', backgroundColor: m.color, borderRadius: 5 }} />
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-
-          {/* ══ AI SUMMARY ══ */}
-          <View style={[styles.sectionCard, { marginBottom: 24 }]}>
+          {/* ══ NEO'S ANALYSIS ══ */}
+          <View style={[styles.sectionCard]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionTitle}>{`NEO’S ${periodLabel.toUpperCase()} ANALYSIS`}</Text>
@@ -417,6 +333,176 @@ const renderStreakDots = () => {
               </TouchableOpacity>
             )}
           </View>
+
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <TrendingUp size={18} color="#F7C873" />
+              <Text style={styles.sectionTitle}>OVERALL PROGRESS</Text>
+            </View>
+            <View style={styles.weightChangeRow}>
+              <Text style={[styles.weightChangeBig, { color: periodColor }]}>{periodWeightDiff >= 0 ? '-' : '+'}{periodDiffAbs} kg</Text>
+            </View>
+            <View style={styles.weeklyRow}>
+              {isLoss ? <TrendingDown size={14} color={periodColor} /> : <TrendingUp size={14} color={periodColor} />}
+              <Text style={[styles.weeklyText, { color: periodColor }]}>{` ${periodDiffAbs} kg ${periodWeightDiff >= 0 ? 'lost' : 'gained'} — ${periodLabel}`}</Text>
+            </View>
+            <View style={styles.journeyWrap}>
+              <View style={styles.journeyLabelRow}>
+                <Text style={styles.journeyLabel}>{`Start\n`}<Text style={styles.journeyValue}>{startWeight} kg</Text></Text>
+                <Text style={[styles.journeyLabel, { textAlign: 'center' }]}>{`Now\n`}<Text style={[styles.journeyValue, { color: '#8B7CFF' }]}>{currWeight} kg</Text></Text>
+                <Text style={[styles.journeyLabel, { textAlign: 'right' }]}>{`Goal\n`}<Text style={styles.journeyValue}>{goalWeight} kg</Text></Text>
+              </View>
+              <View style={styles.journeyTrack}>
+                <LinearGradient colors={['#8B7CFF', '#FF8FA3']} style={[styles.journeyFill, { width: `${pct}%` }]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
+                <View style={[styles.journeyDot, { left: `${pct}%` }]} />
+              </View>
+            </View>
+          </View>
+
+          {/* GOAL PROGRESS BAR */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>FITNESS GOAL PROGRESS</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC' }}>{pct}% complete</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#8B7CFF' }}>{kgLeft} kg to go</Text>
+            </View>
+            <View style={{ height: 14, backgroundColor: '#1A2235', borderRadius: 7, overflow: 'hidden', marginBottom: 10 }}>
+              <LinearGradient colors={['#8B7CFF', '#FF8FA3']} style={{ width: `${pct}%`, height: '100%', borderRadius: 7 }} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
+            </View>
+            <Text style={{ fontSize: 12, color: '#6B7280', lineHeight: 18 }}>
+              {hasReachedTarget
+                ? 'You have reached your target weight. Amazing work—now focus on maintaining it!'
+                : weeksLeft > 0
+                  ? `At your current pace, you'll hit your target in ~${weeksLeft} weeks. Stay consistent—you're on track.`
+                  : 'Stay consistent—you\'re on track to reach your target weight!'}
+            </Text>
+          </View>
+
+          {/* WEIGHT TREND */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>{`WEIGHT TREND — ${periodLabel.toUpperCase()}`}</Text>
+            </View>
+            {dailyData && dailyData.length > 0 && periodData.filter(d => d.weight && parseFloat(String(d.weight)) > 0).length >= 2 ? (
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 95, paddingBottom: 5 }}>
+                {periodData.filter(d => d.weight && parseFloat(String(d.weight)) > 0).slice(-12).map((d, i) => {
+                  const sliceData = periodData.filter(d => d.weight && parseFloat(String(d.weight)) > 0).slice(-12);
+                  const vals = sliceData.map(x => x.weight);
+                  const minW = Math.min(...vals) - 1;
+                  const maxW = Math.max(...vals) + 1;
+                  const barH = maxW !== minW ? Math.round(((d.weight) - minW) / (maxW - minW) * 60) + 10 : 40;
+                  
+                  const dateObj = new Date(d.date);
+                  const dateLabel = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+                  
+                  return (
+                    <View key={i} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 9, color: '#6B7280' }}>{d.weight.toFixed(1)}</Text>
+                      <View style={{ width: '80%', height: barH, backgroundColor: '#B8A8FF', borderRadius: 4, opacity: 0.65 + i * 0.05 }} />
+                      <Text style={{ fontSize: 8, color: '#6B7280', marginTop: 2 }}>{dateLabel}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={{ padding: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', lineHeight: 18 }}>
+                  Not enough weigh-ins yet. Log your weight on multiple days to see your trend chart.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* WEEKLY STREAK */}
+          {renderStreakDots()}
+
+          {/* XP & LEVEL */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>XP & LEVEL</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#F7F8FC' }}>Level {userLevel} ({levelInfo.title})</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#8B7CFF' }}>
+                {levelInfo.nextLevelXp !== null 
+                  ? `${xpInCurrentLevel} / ${xpToNextLevelRange} XP (Level Progress)` 
+                  : `${userXp} XP (Max Level)`}
+              </Text>
+            </View>
+            <View style={{ height: 12, backgroundColor: '#1A2235', borderRadius: 6, overflow: 'hidden' }}>
+              <LinearGradient
+                colors={['#8B7CFF', '#FF8FA3']}
+                style={{ width: `${levelInfo.progressPercent}%`, height: '100%' }}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+            </View>
+          </View>
+
+          {/* NUTRITION TRENDS */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>{`NUTRITION TRENDS — ${periodLabel.toUpperCase()}`}</Text>
+            </View>
+
+            {/* Today's Progress */}
+            <View style={{ marginBottom: 16, padding: 12, backgroundColor: '#1A2235', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(139,124,255,0.15)' }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#8B7CFF', letterSpacing: 0.8, marginBottom: 8 }}>TODAY'S PROGRESS</Text>
+              {hasTodayData ? (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                  <View style={{ flex: 1, minWidth: 80 }}>
+                    <Text style={{ fontSize: 11, color: '#6B7280' }}>Protein</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC', marginTop: 2 }}>
+                      {(todayEntry?.protein || 0).toFixed(0)}g / {(parseFloat(String(profile?.target_protein || '')) || 150)}g
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 80 }}>
+                    <Text style={{ fontSize: 11, color: '#6B7280' }}>Water</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC', marginTop: 2 }}>
+                      {((todayEntry?.water || 0) / 1000).toFixed(1)}L / 2.5L
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 80 }}>
+                    <Text style={{ fontSize: 11, color: '#6B7280' }}>Sleep</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC', marginTop: 2 }}>
+                      {(todayEntry?.sleep || 0).toFixed(1)}h / 8h
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Text style={{ fontSize: 12, color: '#6B7280', lineHeight: 18 }}>
+                  No food or hydration logged yet today. Keep logging your habits to fuel your progress!
+                </Text>
+              )}
+            </View>
+
+            {[
+              { label: 'Protein', key: 'protein', color: '#8B7CFF', unit: 'g', target: parseFloat(String(profile?.target_protein || '')) || 150 },
+              { label: 'Water', key: 'water', color: '#4AA9FF', unit: 'L', target: 2.5, divisor: 1000 },
+              { label: 'Sleep', key: 'sleep', color: '#FFAD42', unit: 'h', target: 8 },
+            ].map(m => {
+              const completedDaysData = periodData.filter(d => !d.date?.startsWith(todayStr));
+              const avg = completedDaysData.length
+                ? completedDaysData.reduce((s, d) => s + (((d as any)[m.key] || 0) / (m.divisor || 1)), 0) / completedDaysData.length
+                : 0;
+              const pctT = Math.min(100, Math.round((avg / m.target) * 100));
+              return (
+                <View key={m.label} style={{ marginBottom: 14 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC' }}>{m.label} (Historical Avg)</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: m.color }}>{avg.toFixed(1)}{m.unit} / {m.target}{m.unit}</Text>
+                  </View>
+                  <View style={{ height: 10, backgroundColor: '#1A2235', borderRadius: 5, overflow: 'hidden' }}>
+                    <View style={{ width: `${pctT}%`, height: '100%', backgroundColor: m.color, borderRadius: 5 }} />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+
 
         </Animated.View>
       </ScrollView>

@@ -9,14 +9,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Plus, Settings, Share2, Zap } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '../services/supabase';
 import PostViewerModal from '../components/profile/PostViewerModal';
+import { ENABLE_REELS } from '../constants/featureFlags';
 
 interface Post {
   id: string;
   image_url: string;
   content: string;
+  type?: string;
 }
 
 export default function ProfileScreen() {
@@ -42,7 +45,9 @@ export default function ProfileScreen() {
         console.error('Error fetching posts:', error);
       }
       if (data) {
-        setPosts(data as Post[]);
+        const rawPosts = data as Post[];
+        const filtered = ENABLE_REELS ? rawPosts : rawPosts.filter(p => p.type !== 'video');
+        setPosts(filtered);
       }
     };
 
@@ -58,7 +63,7 @@ export default function ProfileScreen() {
         Alert.alert('Permission required', 'Please grant permission to access your photos to change your avatar.');
         return;
       }
-      const result = await launchImageLibraryAsync({mediaTypes:MediaTypeOptions.Images,quality:0.8, allowsEditing: true, aspect: [1,1]});
+      const result = await launchImageLibraryAsync({mediaTypes:['images'],quality:0.8, allowsEditing: true, aspect: [1,1]});
       if(!result.canceled && result.assets?.[0]?.uri) {
         await uploadAvatar(result.assets[0].uri);
       }
@@ -78,7 +83,7 @@ export default function ProfileScreen() {
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, base64, { contentType, upsert: true });
+        .upload(filePath, decode(base64), { contentType, upsert: true });
 
       if (uploadError) {
         throw uploadError;

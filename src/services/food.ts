@@ -59,7 +59,7 @@ export async function addFood(
         })
         .select();
 
-    console.log('[DEBUG] addFood insert result:', { error, data });  
+
 
     if (error) {
       throw error; 

@@ -18,6 +18,7 @@ import { updateDailyStreak } from '../services/streaks';
 import { calculateDailyScore } from '../utils/calculateDailyScore';
 import { calculateXP } from '../utils/calculateXP';
 import { getLevelFromXP } from '../constants/levels';
+import { getUserTargets } from '../utils/healthCalculations';
 
 const HealthContext = createContext<any>(null);
 
@@ -76,6 +77,7 @@ export function HealthProvider({ children }: any) {
         activityResult,
         progressResult,
         xpResult,
+        profileResult,
       ] = await Promise.all([
         supabase
           .from('food_logs')
@@ -114,6 +116,12 @@ export function HealthProvider({ children }: any) {
           .select('xp')
           .eq('user_id', userId)
           .gte('created_at', startISO),
+
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle(),
       ]);
 
       // Sum food macros
@@ -142,12 +150,13 @@ export function HealthProvider({ children }: any) {
       const xp = xpResult.data?.reduce((s, r) => s + (Number(r.xp) || 0), 0) ?? 0;
 
       // Daily score
+      const targets = getUserTargets(profileResult.data);
       const dailyScore = calculateDailyScore({
         calories: todayCalories,
         water: todayWater,
         workout: todayWorkout,
         sleep: todaySleep,
-      });
+      }, targets);
 
       const levelInfo = getLevelFromXP(totalXp);
 
@@ -212,27 +221,15 @@ export function HealthProvider({ children }: any) {
 
     previousXPRef.current = currentXP;
 
-    console.log('LEVEL_CHECK', {
-      previousXP: previousXPRef.current,
-      currentXP,
-      previousLevel,
-      newLevel,
-    });
+
     if (
       newLevel > previousLevel &&
       newLevel > (healthData?.lastCelebratedLevel ?? 0)
     ) {
-      console.log(
-        'LEVEL_UP_TRIGGER',
-        previousLevel,
-        newLevel
-      );
+
       const levelInfo = getLevelFromXP(currentXP);
 
-      console.log(
-        'SETTING_PENDING_LEVEL_UP',
-        levelInfo
-      );
+
       setPendingLevelUp({
         level: levelInfo.level,
         title: levelInfo.title,

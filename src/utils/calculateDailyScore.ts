@@ -1,12 +1,13 @@
+import { UserTargets } from './healthCalculations';
+
 export function calculateDailyScore(
   {
     calories,
-
     water,
-
     workout,
     sleep,
-  }: any
+  }: any,
+  targets: UserTargets
 ) {
   let score = 0;
 
@@ -18,7 +19,7 @@ export function calculateDailyScore(
 
   /* WATER */
 
-  if (water >= 3) {
+  if (water >= targets.watermL) {
     score += 25;
   }
 
@@ -30,7 +31,7 @@ export function calculateDailyScore(
 
   /* SLEEP */
 
-  if (sleep >= 7) {
+  if (sleep >= targets.sleep) {
     score += 15;
   }
 

@@ -33,10 +33,6 @@ export const useGamificationStore = create<GamificationState & GamificationActio
   // Actions
   setState: (newState) => set((state) => ({ ...state, ...newState })),
   setPendingAchievement: (achievement) => {
-    console.log(
-      'PENDING_ACHIEVEMENT_SET',
-      achievement
-    );
     set({ pendingAchievement: achievement });
   },
   clearPendingAchievement: () => set({ pendingAchievement: null }),

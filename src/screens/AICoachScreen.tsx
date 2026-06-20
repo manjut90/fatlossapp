@@ -914,13 +914,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
         }
         setYesterdayWorkoutCompleted(workoutCompleted);
 
-        console.log('YESTERDAY_DATE', yesterdayStrDate);
-        console.log('MISSION_DATA', missionData);
-        console.log('MISSIONS_COUNT', missionData?.missions?.length);
-        console.log('COMPLETED_COUNT', missionData?.completed_missions?.length);
-        console.log('MISSION_COMPLETED', missionCompleted);
-        console.log('WORKOUT_COMPLETED', workoutCompleted);
-        console.log('IS_TRAINED_YESTERDAY', missionExists ? (workoutCompleted || missionCompleted) : true);
+
 
       } catch (err) {
         console.error('Failed to check yesterday training status:', err);

@@ -22,19 +22,14 @@ export async function awardCheckInXp(
   reason = 'Check-In',
   user_id?: string,
 ) {
-  console.log('XP_AWARD_START', {
-    amount,
-    reason,
-    user_id,
-  });
+
 
   try {
     const resolvedUserId =
       user_id ||
       (await getCurrentUserId());
 
-    console.log('XP_RESOLVED_USER', resolvedUserId);
-    console.log('XP_RPC_START', { amount, reason });
+
 
     const { data, error } = await supabase.rpc('award_xp', {
       p_user_id: resolvedUserId,
@@ -42,7 +37,7 @@ export async function awardCheckInXp(
       p_reason: reason,
     });
 
-    console.log('XP_RPC_RESULT', data, error);
+
 
     if (error) {
       throw error;
@@ -52,14 +47,14 @@ export async function awardCheckInXp(
       throw new Error(data.error || 'RPC execution failed');
     }
 
-    console.log('XP_AWARD_SUCCESS', data);
+
 
     return {
       success: true,
       xp: amount,
     };
   } catch (err) {
-    console.log('XP_AWARD_FAILED', err);
+    console.error('Failed to award XP:', err);
 
     return {
       success: false,

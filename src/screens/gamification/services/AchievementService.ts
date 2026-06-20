@@ -39,28 +39,15 @@ class AchievementService {
     achievementId: string,
     metadata?: Record<string, any>
   ): Promise<Achievement> {
-    console.log('UNLOCK_START', achievementId);
+
     try {
       const session = await supabase.auth.getSession();
 
-      console.log(
-        'ACHIEVEMENT_SESSION_USER',
-        session.data.session?.user?.id
-      );
 
-      console.log(
-        'ACHIEVEMENT_FUNCTION_USER_ID',
-        userId
-      );
 
-      console.log(
-        'ACHIEVEMENT_INSERT_PAYLOAD',
-        {
-          user_id: userId,
-          achievement_id: achievementId,
-          metadata,
-        }
-      );
+
+
+
 
       const { data, error } = await supabase
         .from('user_achievements')
@@ -79,7 +66,7 @@ class AchievementService {
         throw error;
       }
 
-      console.log('UNLOCK_SUCCESS', data);
+
 
       // If data is null, it means the achievement already existed and was ignored.
       // We should fetch it to return the complete achievement object.
@@ -96,10 +83,7 @@ class AchievementService {
         metadata: data.metadata,
       };
     } catch (err) {
-      console.log(
-        'ACHIEVEMENT_UNLOCK_ERROR',
-        JSON.stringify(err, null, 2)
-      );
+      console.error('Failed to unlock achievement:', err);
       throw err;
     }
   }

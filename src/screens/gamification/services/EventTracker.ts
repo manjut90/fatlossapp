@@ -42,7 +42,7 @@ class EventTracker {
    * @param metadata Optional data associated with the event.
    */
   public track(type: GamificationEvent, metadata?: Record<string, any>) {
-    console.log(`[Gamification] Tracking event: ${type}`, metadata);
+
     this.eventQueue.push({
       type,
       metadata,
@@ -82,13 +82,13 @@ class EventTracker {
     this.eventQueue = []; // Clear queue immediately (optimistic)
 
     try {
-      console.log(`[Gamification] Flushing ${eventsToSend.length} events...`);
+
       // This is where we'll call our backend API.
       // const response = await api.post('/gamification/events', { events: eventsToSend });
       
       // For now, we'll just simulate a successful API call.
       await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('[Gamification] Flush successful.');
+
 
     } catch (error) {
       console.error('[Gamification] Failed to flush event queue:', error);

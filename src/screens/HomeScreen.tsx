@@ -5,10 +5,7 @@ import { useHealth } from '../context/HealthContext';
 import { getWeatherTemp } from '../services/weather';
 import { getLevelFromXP } from '../constants/levels';
 import {
-  calculateBMR,
-  calculateTDEE,
-  calculateGoalCalories,
-  calculateMacros,
+  getUserTargets,
 } from '../utils/healthCalculations';
 
 import React, {
@@ -130,12 +127,12 @@ export default function HomeScreen() {
     clearPendingAchievement,
   } = useGamificationStore();
 
-  console.log(
-    'HOME_PENDING_ACHIEVEMENT',
-    pendingAchievement
-  );
+
 
   const { profile } = useAuth();
+  const targets = getUserTargets(profile);
+  const currentWeight = parseFloat(profile?.current_weight || profile?.weight || '0') || 70;
+  const userGoal = profile?.goal || profile?.goals?.[0] || 'fat_loss';
   const {
     healthData,
     refreshHealthData,
@@ -217,40 +214,15 @@ export default function HomeScreen() {
   const handleImprovePress = () => navigation.navigate('CheckIn');
 
   const dailyScore = healthData?.dailyScore || 0;
-  const currentWeight = parseFloat(profile?.current_weight || profile?.weight) || 70;
-  const targetWeight = parseFloat(profile?.target_weight) || 0;
-  const userGoal = profile?.goals?.[0] || 'fat_loss';
-  const gender = (profile?.gender || '').toLowerCase().trim();
-
-  // Compute nutrition targets from profile data (same approach as AICoachScreen)
-  const bmrGender = gender === 'female' || gender === 'woman' ? 'Female' : 'Male';
-  const profileHeight = parseFloat(profile?.height) || 170;
-  const activityLevel = profile?.activity_level || 'Moderately Active';
-  const bmr = calculateBMR({ weight: currentWeight, height: profileHeight, gender: bmrGender });
-  const tdee = calculateTDEE({ bmr, activityLevel });
-  const computedCalories = calculateGoalCalories({ tdee, goal: userGoal });
-  const computedMacros = calculateMacros({ calories: computedCalories, weight: currentWeight, goal: userGoal });
-
-  const caloriesGoal = parseFloat(profile?.target_calories) || computedCalories;
-
-  console.log('LFGO_CALORIES_DEBUG', {
-    profileGoal: profile?.goal,
-    profileGoals: profile?.goals,
-    activityLevel: profile?.activity_level,
-    currentWeight,
-    profileHeight,
-    bmr,
-    tdee,
-    computedCalories,
-    caloriesGoal
-  });
   
-  const proteinGoal = parseFloat(profile?.target_protein) || computedMacros.protein;
-  const carbsGoal = parseFloat(profile?.target_carbs) || computedMacros.carbs;
-  const fatsGoal = parseFloat(profile?.target_fats) || computedMacros.fats;
-  const waterGoal = 2500;
-  const sleepGoal = 8;
-  const fiberGoal = gender === 'male' || gender === 'man' ? 38 : 25;
+  const targetWeight = targets.targetWeight;
+  const caloriesGoal = targets.calories;
+  const proteinGoal = targets.protein;
+  const carbsGoal = targets.carbs;
+  const fatsGoal = targets.fats;
+  const waterGoal = targets.watermL;
+  const sleepGoal = targets.sleep;
+  const fiberGoal = targets.fiber;
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const livePulse = useRef(new Animated.Value(0)).current;
