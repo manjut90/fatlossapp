@@ -7,16 +7,16 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
-import { Zap, Droplets, Utensils, Footprints, CheckCircle } from 'lucide-react-native';
+import { Zap, Utensils, Footprints, CheckCircle, MoonStar } from 'lucide-react-native';
 import { useDailyMission, Mission } from '../hooks/useDailyMission';
 
 const CATEGORY_CONFIG = {
   movement:  { icon: Footprints, color: '#73F7C8', label: 'MOVEMENT'  },
-  hydration: { icon: Droplets,   color: '#4AA9FF', label: 'HYDRATION' },
   nutrition: { icon: Utensils,   color: '#FF8FA3', label: 'NUTRITION' },
+  recovery:  { icon: MoonStar,   color: '#B1A2FF', label: 'RECOVERY'  },
 };
 
-function CategoryPill({ category }: { category: 'movement' | 'hydration' | 'nutrition' }) {
+function CategoryPill({ category }: { category: 'movement' | 'nutrition' | 'recovery' }) {
   const config = CATEGORY_CONFIG[category] ?? CATEGORY_CONFIG.movement;
   const Icon = config.icon;
   return (
@@ -29,19 +29,17 @@ function CategoryPill({ category }: { category: 'movement' | 'hydration' | 'nutr
 
 function MissionRow({
   mission,
-  index,
   completed,
   onComplete,
 }: {
   mission: Mission;
-  index: number;
   completed: boolean;
   onComplete: () => void;
 }) {
   // Animation values
   const xpAnimation = useRef(new Animated.Value(0)).current;
   const rowAnimation = useRef(new Animated.Value(0)).current;
-  const prevCompletedRef = useRef<boolean>();
+  const prevCompletedRef = useRef<boolean>(completed);
 
   useEffect(() => {
     const prevCompleted = prevCompletedRef.current;
@@ -102,8 +100,8 @@ function MissionRow({
       </Animated.Text>
       <View style={styles.missionLeft}>
         <View style={styles.missionMeta}>
-          <CategoryPill category={mission.category} />
-          <View style={styles.xpPill}>
+          <CategoryPill category={mission.type} />
+          <View style={xpAnimation ? styles.xpPill : styles.xpPill}>
             <Zap size={9} color="#F7C873" />
             <Text style={styles.xpText}>+{mission.xp} XP</Text>
           </View>
@@ -111,7 +109,6 @@ function MissionRow({
         <Text style={[styles.missionTitle, completed && styles.missionTitleDone]}>
           {mission.title}
         </Text>
-        <Text style={styles.missionDesc}>{mission.description}</Text>
       </View>
 
       <TouchableOpacity
@@ -143,8 +140,7 @@ export function MissionCard() {
 
   if (!mission) return null;
 
-  const allDone = mission.missions.length > 0 &&
-    mission.missions.every((_, i) => mission.completed_missions.includes(i));
+  const allDone = mission.completed_count === mission.total_count;
 
   return (
     <View style={styles.card}>
@@ -156,22 +152,39 @@ export function MissionCard() {
       </View>
 
       {/* Coach message */}
-      <Text style={styles.coachSubtle}>Neo prepared this mission based on your recent progress.</Text>
+      <Text style={styles.coachSubtle}>Neo prepared this mission based on your profile.</Text>
       <Text style={styles.coachMsg}>"{mission.coach_message}"</Text>
 
       {/* Divider */}
       <View style={styles.divider} />
 
-      {/* Mission rows */}
-      {mission.missions.map((m: Mission, i: number) => (
-        <MissionRow
-          key={i}
-          mission={m}
-          index={i}
-          completed={mission.completed_missions.includes(i)}
-          onComplete={() => completeMission(i)}
-        />
-      ))}
+      {allDone ? (
+        <View style={styles.completeContainer}>
+          <Text style={styles.completeTitle}>🔥 Daily Missions Complete</Text>
+          <View style={styles.completeXpBadge}>
+            <Zap size={14} color="#F7C873" />
+            <Text style={styles.completeXpText}>+50 XP earned</Text>
+          </View>
+          <Text style={styles.completeSubtitle}>Come back tomorrow for new missions</Text>
+        </View>
+      ) : (
+        <>
+          {/* Mission rows */}
+          {mission.missions.map((m: Mission) => (
+            <MissionRow
+              key={m.type}
+              mission={m}
+              completed={m.completed}
+              onComplete={() => completeMission(m.type)}
+            />
+          ))}
+          
+          {/* Bonus text */}
+          <Text style={{ fontSize: 10, color: '#6B7280', textAlign: 'center', marginTop: 4 }}>
+            Earn +15 XP per mission. Complete all to earn a +5 XP bonus!
+          </Text>
+        </>
+      )}
     </View>
   );
 }
@@ -316,5 +329,38 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     marginTop: 6,
+  },
+  completeContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  completeTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#73F7C8',
+    textAlign: 'center',
+  },
+  completeXpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(247,200,115,0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(247,200,115,0.2)',
+  },
+  completeXpText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#F7C873',
+  },
+  completeSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
   },
 });

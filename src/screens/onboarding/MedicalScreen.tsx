@@ -23,6 +23,9 @@ export default function MedicalScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [uploadedDoc, setUploadedDoc] = useState<any>(null);
   const [otherText, setOtherText] = useState('');
+  const [injuriesText, setInjuriesText] = useState(
+    onboardingData.injuriesLimitations || ''
+  );
 
   const toggle = (item: string) => {
     if (item === 'None') { setSelected(['None']); return; }
@@ -55,7 +58,11 @@ export default function MedicalScreen({ navigation }: any) {
       ? [...selected.filter(x => x !== 'Other'), `Other: ${otherText}`]
       : selected;
 
-    const updatedOnboardingData = { ...onboardingData, healthConditions: finalConditions };
+    const updatedOnboardingData = { 
+      ...onboardingData, 
+      healthConditions: finalConditions,
+      injuriesLimitations: injuriesText
+    };
     setOnboardingData(updatedOnboardingData);
     setLoading(true);
 
@@ -74,6 +81,8 @@ export default function MedicalScreen({ navigation }: any) {
         work_style: updatedOnboardingData.workStyle,
         health_conditions: finalConditions,
         onboarding_completed: true,
+        injuries_limitations: injuriesText || null,
+        schedule_pref: updatedOnboardingData.schedulePref || 'flexible',
       };
 
       const { error } = await supabase
@@ -169,6 +178,29 @@ export default function MedicalScreen({ navigation }: any) {
               numberOfLines={3}
             />
           )}
+        </View>
+        <View style={s.card}>
+          <View style={s.sectionTop}>
+            <HeartPulse size={18} color="#8B7CFF" />
+            <Text style={s.sectionTitle}>Injuries / Limitations</Text>
+          </View>
+          <Text style={{ color: '#6B7280', fontSize: 12, marginBottom: 10 }}>
+            Tell Neo about injuries, pain, or movement limitations so recommendations can be adjusted. LFGO does not provide medical advice.
+          </Text>
+          <TextInput
+            style={{
+              backgroundColor: '#0B1020',
+              borderRadius: 12, padding: 12, color: '#F7F8FC',
+              fontSize: 13, borderWidth: 1,
+              borderColor: 'rgba(139,124,255,0.15)',
+            }}
+            placeholder="e.g., Knee Pain, Lower Back Pain, Flat Feet..."
+            placeholderTextColor="#6B7280"
+            value={injuriesText}
+            onChangeText={setInjuriesText}
+            multiline
+            numberOfLines={3}
+          />
         </View>
         <TouchableOpacity style={s.nextButton} onPress={handleContinue} disabled={loading}>
           {loading

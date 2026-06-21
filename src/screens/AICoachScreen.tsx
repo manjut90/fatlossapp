@@ -35,6 +35,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { awardCheckInXp } from '../services/xp';
 import { updateDailyStreak } from '../services/streaks';
 import { getUserTargets } from '../utils/healthCalculations';
+import { MissionGenerationService } from '../services/missionGeneration';
 
 // =====================================================
 // REQUIRED: Add this to your .env file in project root
@@ -524,14 +525,8 @@ export default function AICoachScreen() {
     const [recipeLoading, setRecipeLoading] = useState(false);
   const [todayMission, setTodayMission] = useState<any>(null);
 
-  const movementMissionIndex = todayMission?.missions
-    ? todayMission.missions.findIndex((m: any) => m.category === 'movement')
-    : -1;
   const isTodayMovementMissionCompleted = !!(
-    todayMission &&
-    todayMission.completed_missions &&
-    movementMissionIndex !== -1 &&
-    todayMission.completed_missions.includes(movementMissionIndex)
+    todayMission?.missions_json?.movement?.completed
   );
   const todaysWorkoutCompleted = isWorkoutCheckedIn || isTodayMovementMissionCompleted;
 
@@ -543,17 +538,9 @@ export default function AICoachScreen() {
     if (todayMission && !force) return todayMission;
     if (!profile?.id) return null;
     try {
-      const today = getLocalDateString();
-      const { data, error } = await supabase
-        .from('daily_missions')
-        .select('*')
-        .eq('user_id', profile.id)
-        .eq('date', today)
-        .maybeSingle();
-      if (!error && data) {
-        setTodayMission(data);
-        return data;
-      }
+      const data = await MissionGenerationService.getTodaysMission(profile.id);
+      setTodayMission(data);
+      return data;
     } catch (err) {
       console.error('Failed to getOrFetchTodayMission:', err);
     }
@@ -579,8 +566,8 @@ export default function AICoachScreen() {
     }
 
     const activeMission = await getOrFetchTodayMission(forceRefresh);
-    const missionContext = activeMission?.missions
-      ? activeMission.missions.map((m: any, idx: number) => `${idx + 1}. ${m.title} - ${m.description}`).join('\n')
+    const missionContext = activeMission?.missions_json
+      ? `- Movement: ${activeMission.missions_json.movement?.title}\n- Nutrition: ${activeMission.missions_json.nutrition?.title}\n- Recovery: ${activeMission.missions_json.recovery?.title}`
       : 'None';
 
     const bfCals = Math.round(targetCalories * 0.25);
@@ -673,33 +660,9 @@ export default function AICoachScreen() {
     if (!profile?.id) return;
     setWorkoutLoading(true);
 
-    // If today's daily_missions record exists, use it as the source of truth
     const activeMission = await getOrFetchTodayMission(true);
-    if (activeMission) {
-      const movementMission = activeMission.missions.find((m: any) => m.category === 'movement') || activeMission.missions[0];
-      if (movementMission) {
-        setAiWorkoutPlan({
-          todaysWorkout: {
-            title: movementMission.title,
-            description: movementMission.description,
-            duration: "30 mins",
-            intensity: "Moderate",
-            exercises: [
-              { name: movementMission.title, sets: "1", reps: "1" }
-            ]
-          },
-          yesterdaysWorkout: {
-            title: "Rest Day",
-            description: "Rest and recover.",
-            duration: "0 mins",
-            intensity: "Low",
-            exercises: []
-          }
-        });
-        setWorkoutLoading(false);
-        return;
-      }
-    }
+    const dailyFocus = activeMission?.missions_json?.daily_focus;
+    const workoutFocus = dailyFocus?.workout_focus || 'Full Body';
 
     const today = getLocalDateString();
     const cacheKey = `ai_workout_${profile.id}_${today}`;
@@ -707,8 +670,24 @@ export default function AICoachScreen() {
     try {
       const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
-        setAiWorkoutPlan(JSON.parse(cached));
+        const plan = JSON.parse(cached);
+        setAiWorkoutPlan(plan);
         setWorkoutLoading(false);
+
+        // Sync target title to database if not already done
+        if (activeMission && activeMission.id !== 'fallback-id') {
+          const currentTitle = activeMission.missions_json?.movement?.title;
+          const targetTitle = `Complete ${plan.todaysWorkout.title} workout`;
+          if (currentTitle !== targetTitle) {
+            const updated = await MissionGenerationService.updateMovementMissionTitle(
+              profile.id,
+              plan.todaysWorkout.title
+            );
+            if (updated) {
+              setTodayMission(updated);
+            }
+          }
+        }
         return;
       }
     } catch {}
@@ -718,17 +697,24 @@ export default function AICoachScreen() {
     const gymAccess = profile?.workout_preference || profile?.gym_access || profile?.gymAccess || 'gym';
     const weight = parseFloat(profile?.current_weight || profile?.weight) || 70;
 
-    const missionContext = activeMission?.missions
-      ? activeMission.missions.map((m: any, idx: number) => `${idx + 1}. ${m.title} - ${m.description}`).join('\n')
+    const missionContext = activeMission?.missions_json
+      ? `- Movement: ${activeMission.missions_json.movement?.title}\n- Nutrition: ${activeMission.missions_json.nutrition?.title}\n- Recovery: ${activeMission.missions_json.recovery?.title}`
       : 'None';
 
     const prompt = `You are Neo — India's top fitness expert. Combine the science of Jeff Nippard with the practicality of an Indian gym culture. Design two complete workouts.
+
+Target today's focus area: ${workoutFocus}.
 
 User:
 - Goal: ${goal.replace(/_/g, ' ')}
 - Experience: ${experience}
 - Equipment: ${gymAccess === 'gym' ? 'Full commercial gym (barbells, cables, machines, dumbbells)' : 'Home only — dumbbells and bodyweight, no machines'}
 - Weight: ${weight}kg
+
+Today's assigned daily focus areas:
+- Workout Focus: ${workoutFocus}
+- Nutrition Focus: ${dailyFocus?.nutrition_focus || 'Balanced'}
+- Recovery Focus: ${dailyFocus?.recovery_focus || 'Standard'}
 
 Today's assigned daily missions for the user:
 ${missionContext}
@@ -737,12 +723,13 @@ Important: Your recommended workouts should not contradict these daily missions.
 
 RULES:
 1. todaysWorkout and yesterdaysWorkout must target DIFFERENT muscle groups or energy systems.
-2. Each workout must have EXACTLY 6-8 exercises.
-3. Include a warm-up note in the description.
-4. Use exercise names that Indian gym-goers understand. Prefer common names (e.g. 'Chest Press' not 'Bench Press', 'Lat Pulldown', 'Leg Press', 'Dumbbell Curl', 'Overhead Press').
-5. For home workouts: use only push-ups, squats, lunges, planks, dumbbell exercises.
-6. Sets: 3-4. Reps: specific ranges like '10-12' or '8-10'. No vague instructions.
-7. Workouts must be appropriate for ${experience} level — not too advanced, not too easy.
+2. Each workout must target the specified workout focus area: ${workoutFocus}.
+3. Each workout must have EXACTLY 6-8 exercises.
+4. Include a warm-up note in the description.
+5. Use exercise names that Indian gym-goers understand. Prefer common names (e.g. 'Chest Press' not 'Bench Press', 'Lat Pulldown', 'Leg Press', 'Dumbbell Curl', 'Overhead Press').
+6. For home workouts: use only push-ups, squats, lunges, planks, dumbbell exercises.
+7. Sets: 3-4. Reps: specific ranges like '10-12' or '8-10'. No vague instructions.
+8. Workouts must be appropriate for ${experience} level — not too advanced, not too easy.
 
 Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
 {
@@ -779,6 +766,17 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
       if (plan?.todaysWorkout && plan?.yesterdaysWorkout) {
         setAiWorkoutPlan(plan);
         await AsyncStorage.setItem(cacheKey, JSON.stringify(plan));
+
+        // Update the movement mission title with the generated workout title!
+        if (activeMission && activeMission.id !== 'fallback-id') {
+          const updated = await MissionGenerationService.updateMovementMissionTitle(
+            profile.id,
+            plan.todaysWorkout.title
+          );
+          if (updated) {
+            setTodayMission(updated);
+          }
+        }
       } else {
         setAiWorkoutPlan(generateWorkoutPlan(profile));
       }
@@ -841,7 +839,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
         // 1. Check yesterday's daily mission
         const { data: missionData, error: missionError } = await supabase
           .from('daily_missions')
-          .select('missions, completed_missions')
+          .select('completed_count, total_count')
           .eq('user_id', profile.id)
           .eq('date', yesterdayStrDate)
           .maybeSingle();
@@ -850,11 +848,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
         let missionExists = false;
         if (!missionError && missionData) {
           missionExists = true;
-          missionCompleted = !!(
-            missionData.completed_missions &&
-            missionData.missions &&
-            missionData.completed_missions.length === missionData.missions.length
-          );
+          missionCompleted = missionData.completed_count === missionData.total_count && missionData.total_count > 0;
         }
         setYesterdayMissionExists(missionExists);
         setYesterdayMissionCompleted(missionCompleted);
@@ -902,33 +896,35 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
       });
 
       // 2. If daily mission exists, complete the movement mission
-      if (todayMission && movementMissionIndex !== -1) {
-        if (!todayMission.completed_missions.includes(movementMissionIndex)) {
-          const updatedCompleted = [...todayMission.completed_missions, movementMissionIndex];
-          const allCompleted = updatedCompleted.length === todayMission.missions.length;
-          const earnedXp = todayMission.missions[movementMissionIndex]?.xp ?? 50;
-
+      if (todayMission && todayMission.id !== 'fallback-id') {
+        if (!todayMission.missions_json?.movement?.completed) {
           // Optimistic update
-          setTodayMission((prev: any) =>
-            prev ? { ...prev, completed_missions: updatedCompleted } : prev
+          setTodayMission((prev: any) => {
+            if (!prev) return null;
+            const updatedJson = {
+              ...prev.missions_json,
+              movement: { ...prev.missions_json.movement, completed: true }
+            };
+            const updatedCount = (updatedJson.movement.completed ? 1 : 0) +
+                                 (updatedJson.nutrition.completed ? 1 : 0) +
+                                 (updatedJson.recovery.completed ? 1 : 0);
+            return {
+              ...prev,
+              missions_json: updatedJson,
+              completed_count: updatedCount
+            };
+          });
+
+          // Update database and award XP using unified service
+          const updatedRecord = await MissionGenerationService.updateMissionCompletion(
+            profile.id,
+            todayMission.id,
+            'movement',
+            true
           );
-
-          // Update database and award XP
-          const todayStr = getLocalDateString();
-          await Promise.all([
-            todayMission.id !== 'fallback'
-              ? supabase
-                  .from('daily_missions')
-                  .update({ completed_missions: updatedCompleted })
-                  .eq('id', todayMission.id)
-              : AsyncStorage.setItem(
-                  `completed_fallback_${profile.id}_${todayStr}`,
-                  JSON.stringify(updatedCompleted)
-                ),
-            awardCheckInXp(earnedXp, 'Mission Complete', profile.id),
-          ]);
-
-          if (allCompleted) {
+          setTodayMission(updatedRecord);
+          
+          if (updatedRecord.completed_count === updatedRecord.total_count) {
             await updateDailyStreak(profile.id);
           }
         }

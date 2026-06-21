@@ -57,7 +57,7 @@ class AchievementService {
             achievement_id: achievementId,
             metadata,
           },
-          { onConflict: 'user_id, achievement_id', ignoreDuplicates: true }
+          { onConflict: 'user_id,achievement_id', ignoreDuplicates: true }
         )
         .select('achievement_id, unlocked_at, metadata')
         .single();

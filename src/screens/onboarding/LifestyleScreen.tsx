@@ -63,6 +63,14 @@ export default function LifestyleScreen({
       ''
   );
 
+  const [
+    schedulePref,
+    setSchedulePref,
+  ] = useState(
+    onboardingData.schedulePref ||
+      'flexible'
+  );
+
   const activityOptions = [
     'Sedentary',
     'Moderate',
@@ -108,6 +116,8 @@ export default function LifestyleScreen({
         trainingExperience,
 
         workStyle,
+
+        schedulePref,
       });
 
       navigation.navigate(
@@ -363,6 +373,59 @@ export default function LifestyleScreen({
                     ]}
                   >
                     {item}
+                  </Text>
+                </TouchableOpacity>
+              )
+            )}
+          </View>
+        </View>
+
+        {/* SCHEDULE PREFERENCE */}
+
+        <View style={styles.card}>
+          <View
+            style={styles.sectionTop}
+          >
+            <Activity
+              size={18}
+              color="#8B7CFF"
+            />
+
+            <Text
+              style={styles.sectionTitle}
+            >
+              Schedule Preference
+            </Text>
+          </View>
+
+          <View style={styles.row}>
+            {['morning', 'evening', 'flexible'].map(
+              (item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.pill,
+
+                    schedulePref ===
+                      item &&
+                      styles.activePill,
+                  ]}
+                  onPress={() =>
+                    setSchedulePref(
+                      item
+                    )
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.pillText,
+
+                      schedulePref ===
+                        item &&
+                        styles.activePillText,
+                    ]}
+                  >
+                    {item === 'morning' ? 'Morning' : item === 'evening' ? 'Evening' : 'Flexible'}
                   </Text>
                 </TouchableOpacity>
               )

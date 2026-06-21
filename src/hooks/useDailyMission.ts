@@ -1,32 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useHealth } from '../context/HealthContext';
-import { supabase } from '../services/supabase';
-import { awardCheckInXp } from '../services/xp';
-import { updateDailyStreak } from '../services/streaks';
-import { getFallbackTemplate } from '../constants/missionTemplates';
-import { getLocalDateString } from '../utils/localDate';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MissionGenerationService, DailyMissionsJson } from '../services/missionGeneration';
 
 export interface Mission {
+  type: 'movement' | 'nutrition' | 'recovery';
   title: string;
-  description: string;
-  category: 'movement' | 'hydration' | 'nutrition';
+  completed: boolean;
   xp: number;
 }
 
 export interface DailyMission {
   id: string;
   date: string;
-  missions: Mission[];
   coach_message: string;
-  completed_missions: number[];
+  missions: Mission[];
+  completed_count: number;
+  total_count: number;
+  xp_reward: number;
 }
 
 interface UseDailyMissionResult {
   mission: DailyMission | null;
   loading: boolean;
-  completeMission: (index: number) => Promise<void>;
+  completeMission: (type: 'movement' | 'nutrition' | 'recovery') => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 export function useDailyMission(): UseDailyMissionResult {
@@ -36,164 +34,114 @@ export function useDailyMission(): UseDailyMissionResult {
   const [mission, setMission] = useState<DailyMission | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const today = getLocalDateString();
-
-  useEffect(() => {
-    if (!user?.id) return;
-    fetchOrGenerate();
-  }, [user?.id]);
-
-  async function fetchOrGenerate() {
+  const fetchTodaysMission = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      // 1. Check DB for existing mission today
-      const { data: existing, error } = await supabase
-        .from('daily_missions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('date', today)
-        .single();
+      const record = await MissionGenerationService.getTodaysMission(user.id);
+      
+      const json = record.missions_json as DailyMissionsJson;
+      const missionsList: Mission[] = [
+        { type: 'movement', title: json.movement.title, completed: json.movement.completed, xp: 15 },
+        { type: 'nutrition', title: json.nutrition.title, completed: json.nutrition.completed, xp: 15 },
+        { type: 'recovery', title: json.recovery.title, completed: json.recovery.completed, xp: 15 }
+      ];
 
-      if (existing && !error) {
-        setMission(existing as DailyMission);
-        return;
-      }
-
-      // 2. Not found — invoke Edge Function
-      const { data, error: fnError } = await supabase.functions.invoke(
-        'generate-mission',
-        { body: { user_id: user.id, date: today } }
-      );
-
-      if (fnError) throw fnError;
-      setMission(data as DailyMission);
-
-    } catch (err) {
-      console.error('[useDailyMission] fetch/generate failed:', err);
-
-      // 3. Last resort — local fallback (never crash HomeScreen)
-      const fallback = getFallbackTemplate(today);
-      let completedFallback: number[] = [];
-      try {
-        const stored = await AsyncStorage.getItem(`completed_fallback_${user.id}_${today}`);
-        if (stored) {
-          completedFallback = JSON.parse(stored);
-        }
-      } catch (e) {
-        console.error('Failed to read fallback completions', e);
-      }
       setMission({
-        id: 'fallback',
-        date: today,
-        missions: fallback.missions as Mission[],
-        coach_message: fallback.coach_message,
-        completed_missions: completedFallback,
+        id: record.id,
+        date: record.date,
+        coach_message: record.coach_message,
+        missions: missionsList,
+        completed_count: record.completed_count,
+        total_count: record.total_count,
+        xp_reward: record.xp_reward
       });
+    } catch (err) {
+      console.error('[useDailyMission] fetch failed:', err);
     } finally {
       setLoading(false);
     }
-  }
+  }, [user?.id]);
 
-  const completeMission = useCallback(async (index: number) => {
+  useEffect(() => {
+    fetchTodaysMission();
+  }, [fetchTodaysMission]);
+
+  const completeMission = useCallback(async (type: 'movement' | 'nutrition' | 'recovery') => {
     if (!mission || !user?.id) return;
 
-    // Guard: idempotent — ignore if already completed
-    if (mission.completed_missions.includes(index)) return;
+    // Find the mission in local list and check if already completed
+    const targetMission = mission.missions.find(m => m.type === type);
+    if (!targetMission || targetMission.completed) return;
 
-    if (mission.id === 'fallback') {
-      try {
-        const stored = await AsyncStorage.getItem(`completed_fallback_${user.id}_${today}`);
-        const currentCompleted: number[] = stored ? JSON.parse(stored) : [];
-        if (currentCompleted.includes(index)) {
-          console.log('Fallback mission already completed. Skipping XP.');
-          return;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      const { data: latestMission } = await supabase
-        .from('daily_missions')
-        .select('completed_missions')
-        .eq('id', mission.id)
-        .single();
-
-      if (latestMission?.completed_missions?.includes(index)) {
-        console.log('Mission already completed. Skipping XP.');
-        return;
-      }
-    }
-
-    const updatedCompleted = [...mission.completed_missions, index];
-    const allCompleted =
-      updatedCompleted.length ===
-      mission.missions.length;
-    const earnedXp = mission.missions[index]?.xp ?? 50;
-
-    // Optimistic update — UI responds immediately
-    setMission(prev =>
-      prev ? { ...prev, completed_missions: updatedCompleted } : prev
-    );
+    // Optimistic Update
+    setMission(prev => {
+      if (!prev) return null;
+      const updatedMissions = prev.missions.map(m => 
+        m.type === type ? { ...m, completed: true } : m
+      );
+      const updatedCount = prev.completed_count + 1;
+      return {
+        ...prev,
+        missions: updatedMissions,
+        completed_count: updatedCount
+      };
+    });
 
     try {
-      if (mission.id === 'fallback') {
-        await AsyncStorage.setItem(
-          `completed_fallback_${user.id}_${today}`,
-          JSON.stringify(updatedCompleted)
-        );
-      }
-
-      await Promise.all([
-        mission.id !== 'fallback'
-          ? supabase
-              .from('daily_missions')
-              .update({
-                completed_missions: updatedCompleted,
-              })
-              .eq('id', mission.id)
-          : Promise.resolve(),
-
-        awardCheckInXp(
-          earnedXp,
-          'Mission Complete',
-          user.id
-        ),
-      ]);
-
-      if (allCompleted) {
-        await updateDailyStreak(user.id);
-      }
-
-      await refreshHealthData();
-
-    } catch (err) {
-      console.error('[useDailyMission] completeMission failed:', err);
-
-      if (mission.id === 'fallback') {
-        try {
-          const rolledBack = mission.completed_missions;
-          await AsyncStorage.setItem(
-            `completed_fallback_${user.id}_${today}`,
-            JSON.stringify(rolledBack)
-          );
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
-      // Rollback optimistic update on failure
-      setMission(prev =>
-        prev
-          ? {
-              ...prev,
-              completed_missions: prev.completed_missions.filter(
-                i => i !== index
-              ),
-            }
-          : prev
+      // Call service to update database and award XP
+      const record = await MissionGenerationService.updateMissionCompletion(
+        user.id,
+        mission.id,
+        type,
+        true
       );
+
+      // Parse updated record
+      const json = record.missions_json as DailyMissionsJson;
+      const missionsList: Mission[] = [
+        { type: 'movement', title: json.movement.title, completed: json.movement.completed, xp: 15 },
+        { type: 'nutrition', title: json.nutrition.title, completed: json.nutrition.completed, xp: 15 },
+        { type: 'recovery', title: json.recovery.title, completed: json.recovery.completed, xp: 15 }
+      ];
+
+      setMission({
+        id: record.id,
+        date: record.date,
+        coach_message: record.coach_message,
+        missions: missionsList,
+        completed_count: record.completed_count,
+        total_count: record.total_count,
+        xp_reward: record.xp_reward
+      });
+
+      // Refresh health context (levels, XP UI)
+      await refreshHealthData();
+    } catch (err) {
+      console.error('[useDailyMission] completeMission failed, rolling back:', err);
+      // Rollback on error
+      setMission(prev => {
+        if (!prev) return null;
+        const rolledBackMissions = prev.missions.map(m => 
+          m.type === type ? { ...m, completed: false } : m
+        );
+        const rolledBackCount = Math.max(0, prev.completed_count - 1);
+        return {
+          ...prev,
+          missions: rolledBackMissions,
+          completed_count: rolledBackCount
+        };
+      });
     }
   }, [mission, user?.id, refreshHealthData]);
 
-  return { mission, loading, completeMission };
+  return { 
+    mission, 
+    loading, 
+    completeMission, 
+    refresh: fetchTodaysMission 
+  };
 }

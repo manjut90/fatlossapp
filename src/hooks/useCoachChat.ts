@@ -18,7 +18,7 @@ export default function useCoachChat() {
         const today = getLocalDateString();
         const { data } = await supabase
           .from('daily_missions')
-          .select('missions, coach_message, completed_missions')
+          .select('missions_json, coach_message')
           .eq('user_id', user.id)
           .eq('date', today)
           .maybeSingle();
@@ -31,12 +31,13 @@ export default function useCoachChat() {
   }, [user?.id]);
 
   const buildMissionBlock = (): string => {
-    if (!todayMission?.missions?.length) return '';
-    const completed = todayMission.completed_missions || [];
-    const lines = todayMission.missions.map((m: any, i: number) => {
-      const status = completed.includes(i) ? '✓ completed' : 'pending';
-      return `- ${m.title}: ${m.description} (${status})`;
-    });
+    if (!todayMission?.missions_json) return '';
+    const json = todayMission.missions_json;
+    const lines = [
+      `- ${json.movement?.title || 'Movement Mission'} (${json.movement?.completed ? '✓ completed' : 'pending'})`,
+      `- ${json.nutrition?.title || 'Nutrition Mission'} (${json.nutrition?.completed ? '✓ completed' : 'pending'})`,
+      `- ${json.recovery?.title || 'Recovery Mission'} (${json.recovery?.completed ? '✓ completed' : 'pending'})`
+    ];
     return `TODAY'S MISSIONS (you assigned these):
 ${lines.join('\n')}
 ${todayMission.coach_message ? `COACH INTENT: ${todayMission.coach_message}` : ''}
