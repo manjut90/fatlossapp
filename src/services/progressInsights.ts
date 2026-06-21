@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import type { ProgressMetrics } from '../hooks/useProgressMetrics';
+import { getUserTargets } from '../utils/healthCalculations';
 
 interface InsightsResponse {
   positives: string;
@@ -73,7 +74,7 @@ Negatives: ${detectedNegatives.length > 0 ? detectedNegatives.join(', ') : 'None
 
 METRICS THIS WEEK:
 - Calories: ${Math.round(metrics.weekComparisonMetrics.calories.current)}/day (vs ${Math.round(metrics.weekComparisonMetrics.calories.previous)}/day last week)
-- Protein: ${Math.round(metrics.weekComparisonMetrics.protein.current)}g/day (goal: ${profile?.target_protein || 150}g)
+- Protein: ${Math.round(metrics.weekComparisonMetrics.protein.current)}g/day (goal: ${getUserTargets(profile).protein}g)
 - Workouts: ${metrics.weekComparisonMetrics.workout.current} days (vs ${metrics.weekComparisonMetrics.workout.previous} last week)
 - Sleep: ${metrics.weekComparisonMetrics.sleep.current.toFixed(1)} hours/night (vs ${metrics.weekComparisonMetrics.sleep.previous.toFixed(1)} last week)
 

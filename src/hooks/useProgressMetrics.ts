@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useHistoricalData } from './useHistoricalData';
 import { useAuth } from '../context/AuthContext';
+import { getUserTargets } from '../utils/healthCalculations';
 
 export interface MetricTrend {
   current: number;
@@ -116,9 +117,10 @@ export function useProgressMetrics(): ProgressMetrics {
     };
 
     // Auto-detect positives and negatives
-    const calorieGoal = profile?.target_calories || 2000;
-    const proteinGoal = profile?.target_protein || 150;
-    const waterGoal = 2500;
+    const targets = getUserTargets(profile);
+    const calorieGoal = targets.calories;
+    const proteinGoal = targets.protein;
+    const waterGoal = targets.watermL;
 
     // Protein consistency
     const proteinDaysCompleted = last7Days.filter(d => d.protein >= proteinGoal).length;

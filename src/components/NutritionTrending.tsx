@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BarChart } from 'react-native-chart-kit';
 import { useHistoricalData } from '../hooks/useHistoricalData';
 import { useAuth } from '../context/AuthContext';
+import { getUserTargets } from '../utils/healthCalculations';
 
 type TrendingMode = 'weekly' | 'comparison' | 'averages';
 
@@ -17,12 +18,13 @@ export function NutritionTrending({ mode, setMode }) {
   const { dailyData } = useHistoricalData();
   const { profile } = useAuth();
 
+  const userTargets = getUserTargets(profile);
   const targets = {
-    calories: profile?.target_calories || 2000,
-    protein: profile?.target_protein || 150,
-    carbs: 250,
-    fats: 80,
-    fiber: 30,
+    calories: userTargets.calories,
+    protein: userTargets.protein,
+    carbs: userTargets.carbs,
+    fats: userTargets.fats,
+    fiber: userTargets.fiber,
   };
 
   // Prepare chart data based on mode

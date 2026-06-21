@@ -34,12 +34,7 @@ import { getLocalDateString } from '../utils/localDate';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { awardCheckInXp } from '../services/xp';
 import { updateDailyStreak } from '../services/streaks';
-import {
-  calculateBMR,
-  calculateTDEE,
-  calculateGoalCalories,
-  calculateMacros,
-} from '../utils/healthCalculations';
+import { getUserTargets } from '../utils/healthCalculations';
 
 // =====================================================
 // REQUIRED: Add this to your .env file in project root
@@ -80,7 +75,7 @@ function parseHealthConditions(raw: any): string[] {
   return [];
 }
 
-function generateMealPlan(profile) {
+function generateMealPlan(profile: any) {
   if (!profile) {
     return nonVegMealPlan.map(meal => ({
       ...meal,
@@ -92,39 +87,19 @@ function generateMealPlan(profile) {
     }));
   }
 
-  const weight = parseFloat(profile?.current_weight || profile?.weight) || 70;
-  const height = parseFloat(profile?.height) || 170;
-  const gender = profile?.sex || 'Male';
-  const activityLevel = profile?.activity_level || 'Moderately Active';
-  const goal = profile?.goal || profile?.goals?.[0] || 'fitness';
-
   const conditions = parseHealthConditions(profile?.health_conditions);
   const isVegetarian = conditions.includes('vegetarian');
 
   // Always include BOTH veg and non-veg in fallback so filters work
   const basePlan = [...vegMealPlan, ...nonVegMealPlan];
 
-  const bmr = calculateBMR({
-    weight,
-    height,
-    gender,
-  });
-
-  const tdee = calculateTDEE({
-    bmr,
-    activityLevel,
-  });
-
-  const targetCalories = calculateGoalCalories({
-    tdee,
-    goal,
-  });
-
-  const macros = calculateMacros({
-    calories: targetCalories,
-    weight,
-    goal,
-  });
+  const targets = getUserTargets(profile);
+  const targetCalories = targets.calories;
+  const macros = {
+    protein: targets.protein,
+    carbs: targets.carbs,
+    fats: targets.fats,
+  };
 
   const calorieDistribution = {
     Breakfast: 0.25,
@@ -144,12 +119,12 @@ function generateMealPlan(profile) {
 
   return basePlan.map((meal) => {
     const mealCalories = Math.round(
-      targetCalories * calorieDistribution[meal.time]
+      targetCalories * calorieDistribution[meal.time as keyof typeof calorieDistribution]
     );
     const mealMacros = {
-      protein: Math.round(macros.protein * macroDistribution[meal.time].p),
-      carbs: Math.round(macros.carbs * macroDistribution[meal.time].c),
-      fats: Math.round(macros.fats * macroDistribution[meal.time].f),
+      protein: Math.round(macros.protein * macroDistribution[meal.time as keyof typeof macroDistribution].p),
+      carbs: Math.round(macros.carbs * macroDistribution[meal.time as keyof typeof macroDistribution].c),
+      fats: Math.round(macros.fats * macroDistribution[meal.time as keyof typeof macroDistribution].f),
     };
 
     return {
@@ -439,7 +414,7 @@ const workoutDatabase = {
 
 const experienceLevels = ['Beginner', 'Intermediate', 'Advanced'];
 
-function generateWorkoutPlan(profile) {
+function generateWorkoutPlan(profile: any) {
   const defaultWorkout = {
     title: 'Full Body Strength',
     description:
@@ -461,28 +436,28 @@ function generateWorkoutPlan(profile) {
     };
   }
 
-  const goal = profile.goal || profile.goals?.[0] || 'fitness';
+  const goal = (profile.goal || profile.goals?.[0] || 'fitness') as keyof typeof workoutDatabase;
   const experience = profile.training_experience || 'Beginner';
   const gymAccess = profile.workout_preference || profile.gym_access || 'gym';
 
   const goalWorkouts =
     workoutDatabase[goal] || workoutDatabase.healthy_lifestyle;
-  const todaysWorkoutData = goalWorkouts[experience] || goalWorkouts.Beginner;
+  const todaysWorkoutData = goalWorkouts[experience as keyof typeof goalWorkouts] || goalWorkouts.Beginner;
 
   const currentExperienceIndex = experienceLevels.indexOf(experience);
   const yesterdayExperienceIndex = Math.max(0, currentExperienceIndex - 1);
   const yesterdayExperience = experienceLevels[yesterdayExperienceIndex];
   const yesterdaysWorkoutData =
-    goalWorkouts[yesterdayExperience] || goalWorkouts.Beginner;
+    goalWorkouts[yesterdayExperience as keyof typeof goalWorkouts] || goalWorkouts.Beginner;
 
-  const getWorkout = (data) => {
-    const exercises = data.exercises[gymAccess] || data.exercises.home;
+  const getWorkout = (data: any) => {
+    const exercises = data.exercises[gymAccess as keyof typeof data.exercises] || data.exercises.home;
     return {
       title: data.title,
       description: data.description,
       duration: data.duration,
       intensity: data.intensity,
-      exercises: exercises.map((ex) => ({
+      exercises: exercises.map((ex: any) => ({
         ...ex,
         reps: String(ex.reps),
         sets: String(ex.sets),
@@ -506,31 +481,23 @@ export default function AICoachScreen() {
 
   const firstName = profile?.full_name?.split(' ')[0] || 'Champ';
   const goal = profile?.goal || profile?.goals?.[0] || 'fitness';
-  const weight = parseFloat(profile?.current_weight || profile?.weight) || 70;
-  const height = parseFloat(profile?.height) || 170;
 
   const heroMessage = goal === 'fat_loss'
     ? `Burning fat is science, not suffering. Your plan is calibrated for maximum results.`
     : goal === 'muscle_gain'
     ? `Muscle is built in the kitchen as much as the gym. Your plan maximises both.`
-    : `Peak fitness is a daily practice. Your personalised plan adapts to your lifestyle.`
-
+    : `Peak fitness is a daily practice. Your personalised plan adapts to your lifestyle.`;
   const isTrainedYesterday = yesterdayWorkoutCompleted || yesterdayMissionCompleted;
   const shouldShowMissedWorkoutBanner =
     yesterdayMissionExists &&
     !isTrainedYesterday &&
     healthData.streak > 0;
 
-  const gender = profile?.sex || 'Male';
-  const activityLevel = profile?.activity_level || 'Moderately Active';
-  const bmr = calculateBMR({ weight, height, gender });
-  const tdee = calculateTDEE({ bmr, activityLevel });
-  const computedCalories = calculateGoalCalories({ tdee, goal });
-  const computedMacros = calculateMacros({ calories: computedCalories, weight, goal });
-  const targetCalories = parseFloat(profile?.target_calories) || computedCalories;
-  const targetProtein = parseFloat(profile?.target_protein) || computedMacros.protein;
-  const targetCarbs = parseFloat(profile?.target_carbs) || computedMacros.carbs;
-  const targetFats = parseFloat(profile?.target_fats) || computedMacros.fats;
+  const targets = getUserTargets(profile);
+  const targetCalories = targets.calories;
+  const targetProtein = targets.protein;
+  const targetCarbs = targets.carbs;
+  const targetFats = targets.fats;
 
   // State for meal filtering
   const conditions = parseHealthConditions(profile?.health_conditions);

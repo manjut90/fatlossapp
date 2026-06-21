@@ -13,6 +13,7 @@ import { useHealth } from '../context/HealthContext';
 import { useProgressMetrics } from '../hooks/useProgressMetrics';
 import { useHistoricalData } from '../hooks/useHistoricalData';
 import { getLevelFromXP } from '../constants/levels';
+import { getUserTargets } from '../utils/healthCalculations';
 
 const MOTIVATIONAL_LINES = [
   "The only bad workout is the one that didn't happen.",
@@ -66,6 +67,7 @@ export default function ProgressScreen() {
 
   const firstName = profile?.full_name?.split(' ')[0] || 'Champ';
   const goal = profile?.goal || profile?.goals?.[0] || 'fat_loss';
+  const targets = getUserTargets(profile);
   
   const startWeight = parseFloat(profile?.initial_weight || '0')
     || (firstWeightEntry ? parseFloat(String(firstWeightEntry.weight)) : 0)
@@ -75,11 +77,7 @@ export default function ProgressScreen() {
     
   const currWeight = parseFloat(String(currentWeight)) || parseFloat(profile?.current_weight || '0') || 0;
   
-  const targetWeight = parseFloat(profile?.target_weight || '0') > 0
-    ? parseFloat(profile?.target_weight || '0')
-    : parseFloat(profile?.current_weight || '0') > 0
-      ? Math.max(parseFloat(profile?.current_weight || '0') - 5, 50)
-      : 65;
+  const targetWeight = targets.targetWeight;
   const goalWeight = targetWeight;
   const weightDiff = parseFloat((startWeight - currWeight).toFixed(1));
   const isLoss = goal === 'fat_loss' ? weightDiff >= 0 : weightDiff <= 0;
@@ -157,7 +155,7 @@ Data:
 - Period change: ${periodDiffAbs}kg ${periodWeightDiff >= 0 ? 'lost' : 'gained'}
 - Progress: ${pct}%
 - Workout days: ${workoutDays}/${Math.min(periodDays, 7)}
-- Avg protein: ${avgProtein}g (target: ${profile?.target_protein || 150}g)
+- Avg protein: ${avgProtein}g (target: ${targets.protein}g)
 - Avg water: ${avgWater}L
 - Avg sleep: ${avgSleep}h
 - Streak: ${healthData.streak} days
@@ -455,19 +453,19 @@ const renderStreakDots = () => {
                   <View style={{ flex: 1, minWidth: 80 }}>
                     <Text style={{ fontSize: 11, color: '#6B7280' }}>Protein</Text>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC', marginTop: 2 }}>
-                      {(todayEntry?.protein || 0).toFixed(0)}g / {(parseFloat(String(profile?.target_protein || '')) || 150)}g
+                      {(todayEntry?.protein || 0).toFixed(0)}g / {targets.protein}g
                     </Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 80 }}>
                     <Text style={{ fontSize: 11, color: '#6B7280' }}>Water</Text>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC', marginTop: 2 }}>
-                      {((todayEntry?.water || 0) / 1000).toFixed(1)}L / 2.5L
+                      {((todayEntry?.water || 0) / 1000).toFixed(1)}L / {targets.water}L
                     </Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 80 }}>
                     <Text style={{ fontSize: 11, color: '#6B7280' }}>Sleep</Text>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#F7F8FC', marginTop: 2 }}>
-                      {(todayEntry?.sleep || 0).toFixed(1)}h / 8h
+                      {(todayEntry?.sleep || 0).toFixed(1)}h / {targets.sleep}h
                     </Text>
                   </View>
                 </View>
@@ -479,9 +477,9 @@ const renderStreakDots = () => {
             </View>
 
             {[
-              { label: 'Protein', key: 'protein', color: '#8B7CFF', unit: 'g', target: parseFloat(String(profile?.target_protein || '')) || 150 },
-              { label: 'Water', key: 'water', color: '#4AA9FF', unit: 'L', target: 2.5, divisor: 1000 },
-              { label: 'Sleep', key: 'sleep', color: '#FFAD42', unit: 'h', target: 8 },
+              { label: 'Protein', key: 'protein', color: '#8B7CFF', unit: 'g', target: targets.protein },
+              { label: 'Water', key: 'water', color: '#4AA9FF', unit: 'L', target: targets.water, divisor: 1000 },
+              { label: 'Sleep', key: 'sleep', color: '#FFAD42', unit: 'h', target: targets.sleep },
             ].map(m => {
               const completedDaysData = periodData.filter(d => !d.date?.startsWith(todayStr));
               const avg = completedDaysData.length

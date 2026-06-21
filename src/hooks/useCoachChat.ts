@@ -3,6 +3,7 @@ import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { getLocalDateString } from '../utils/localDate';
+import { getUserTargets } from '../utils/healthCalculations';
 
 export default function useCoachChat() {
   const { healthData } = useHealth();
@@ -46,8 +47,9 @@ ${todayMission.coach_message ? `COACH INTENT: ${todayMission.coach_message}` : '
     const name = profile?.full_name?.split(' ')[0] || 'there';
     const goal = profile?.goal || profile?.goals?.[0] || 'fat loss';
     const weight = profile?.current_weight || profile?.weight || profile?.weight_kg || 70;
-    const targetCalories = profile?.target_calories || 2000;
-    const targetProtein = profile?.target_protein || 150;
+    const targets = getUserTargets(profile);
+    const targetCalories = targets.calories;
+    const targetProtein = targets.protein;
 
     const {
       todayCalories = 0,
@@ -141,8 +143,9 @@ YOUR RULES:
     const lower = text.toLowerCase();
     const name = profile?.full_name?.split(' ')[0] || '';
     const { todayCalories = 0, todayProtein = 0, todayWorkout = false } = healthData || {};
-    const targetCalories = profile?.target_calories || 2000;
-    const targetProtein = profile?.target_protein || 150;
+    const targets = getUserTargets(profile);
+    const targetCalories = targets.calories;
+    const targetProtein = targets.protein;
 
     if (lower.includes('hi') || lower.includes('hello') || lower.includes('hey')) {
       return `Hey ${name}! 👋 You're at ${todayCalories} kcal today. ${todayWorkout ? 'Great job getting that workout in!' : 'Still waiting on that workout 💪'} What can I help you with?`;
@@ -175,11 +178,11 @@ YOUR RULES:
     }
 
     if (lower.includes('water') || lower.includes('hydration')) {
-      return `Hydration is crucial for fat loss ${name}. Aim for 2.5L today. Keep a water bottle with you at all times 💧`;
+      return `Hydration is crucial for fat loss ${name}. Aim for ${targets.water}L today. Keep a water bottle with you at all times 💧`;
     }
 
     if (lower.includes('sleep')) {
-      return `Sleep is when your body recovers and burns fat ${name}. Aim for 7-8 hours and try to sleep before midnight 😴`;
+      return `Sleep is when your body recovers and burns fat ${name}. Aim for ${targets.sleep} hours and try to sleep before midnight 😴`;
     }
 
     return `I'm here to help ${name}! Ask me about your nutrition, workouts, hydration or sleep. You can also tell me what you ate and I'll track it 👊`;

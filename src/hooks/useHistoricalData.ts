@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useHealth } from '../context/HealthContext';
 import { supabase } from '../services/supabase';
+import { getUserTargets } from '../utils/healthCalculations';
 
 interface DailyData {
   date: string;
@@ -194,10 +195,12 @@ export function useHistoricalData(): HistoricalData {
     fetchHistoricalData();
   }, [fetchHistoricalData]);
 
+  const targets = getUserTargets(profile);
+
   return {
     firstWeightEntry,
     currentWeight: profile?.current_weight || 0,
-    targetWeight: profile?.target_weight || 0,
+    targetWeight: targets.targetWeight,
     dailyData,
     weekData: [],
     loading,
