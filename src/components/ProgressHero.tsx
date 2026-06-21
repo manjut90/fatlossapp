@@ -9,11 +9,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Sparkles } from 'lucide-react-native';
 import { useProgressMetrics } from '../hooks/useProgressMetrics';
 
-export function ProgressHero({ mode, setMode }) {
+export function ProgressHero({ mode, setMode }: any) {
   const metrics = useProgressMetrics();
 
-  const m = metrics.overallMetrics;
-  const wm = metrics.weekComparisonMetrics;
+  const m = metrics.overallMetrics as any;
+  const wm = metrics.weekComparisonMetrics as any;
 
   const isOverall = mode === 'overall';
   const isWeekly = mode === 'weekly';

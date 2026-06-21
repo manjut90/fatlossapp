@@ -19,6 +19,8 @@ export interface ProgressMetrics {
     weeksRemaining: number;
     percentageComplete: number;
     startDate: string;
+    currentWeight: number;
+    targetWeight: number;
   };
   weekComparisonMetrics: {
     calories: MetricTrend;
@@ -72,6 +74,8 @@ export function useProgressMetrics(): ProgressMetrics {
           weeksRemaining: 0,
           percentageComplete: 0,
           startDate: '',
+          currentWeight: 0,
+          targetWeight: 0,
         },
         weekComparisonMetrics: {
           calories: { current: 0, previous: 0, change: 0, percentChange: 0, trend: 'stable' },
@@ -180,6 +184,8 @@ export function useProgressMetrics(): ProgressMetrics {
         weeksRemaining: Math.max(0, weeksRemaining),
         percentageComplete: Math.round(percentageComplete),
         startDate: firstWeightEntry.date,
+        currentWeight,
+        targetWeight,
       },
       weekComparisonMetrics: {
         calories: calculateMetricTrend(last7Avg.calories, prev7Avg.calories),

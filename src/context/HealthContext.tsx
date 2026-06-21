@@ -45,12 +45,13 @@ const DEFAULT_HEALTH_DATA = {
   level: 1,
   streak: 0,
   timeline: [],
+  lastCelebratedLevel: 0,
 };
 
 export function HealthProvider({ children }: any) {
   const [healthData, setHealthData] = useState(DEFAULT_HEALTH_DATA);
   const [initialized, setInitialized] = useState(false);
-  const [pendingLevelUp, setPendingLevelUp] = useState(null);
+  const [pendingLevelUp, setPendingLevelUp] = useState<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const previousXPRef = useRef<number | null>(null);
 

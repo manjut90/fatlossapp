@@ -137,6 +137,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: '#8B7CFF',
+    fontWeight: '600',
+  },
 
   grid: {
     flexDirection: 'row',
