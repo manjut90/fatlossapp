@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -101,7 +101,7 @@ function MissionRow({
       <View style={styles.missionLeft}>
         <View style={styles.missionMeta}>
           <CategoryPill category={mission.type} />
-          <View style={xpAnimation ? styles.xpPill : styles.xpPill}>
+          <View style={styles.xpPill}>
             <Zap size={9} color="#F7C873" />
             <Text style={styles.xpText}>+{mission.xp} XP</Text>
           </View>
@@ -128,6 +128,7 @@ function MissionRow({
 
 export function MissionCard() {
   const { mission, loading, completeMission } = useDailyMission();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   if (loading) {
     return (
@@ -140,16 +141,67 @@ export function MissionCard() {
 
   if (!mission) return null;
 
-  const allDone = mission.completed_count === mission.total_count;
+  const completedCount = mission.missions.filter(m => m.completed).length;
+  const totalCount = mission.missions.length;
+  const allDone = completedCount === totalCount;
+  const xpAvailable = (totalCount - completedCount) * 15;
+
+  const getMissionStatusChar = (completed: boolean) => {
+    return completed ? '✓' : '○';
+  };
+
+  const getMissionTypeLabel = (type: string) => {
+    switch (type) {
+      case 'movement': return 'Workout';
+      case 'nutrition': return 'Nutrition';
+      case 'recovery': return 'Recovery';
+      default: return type;
+    }
+  };
+
+  if (!isExpanded) {
+    return (
+      <TouchableOpacity 
+        style={styles.compactCard} 
+        onPress={() => setIsExpanded(true)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.compactMainRow}>
+          <View style={styles.compactLeftColumn}>
+            <Text style={styles.compactHeaderText}>TODAY'S MISSIONS</Text>
+            <Text style={styles.compactProgressValue}>
+              {completedCount}/{totalCount} Complete
+            </Text>
+          </View>
+          <View style={styles.compactRightColumn}>
+            {xpAvailable > 0 ? (
+              <Text style={styles.compactXpText}>+{xpAvailable} XP Available</Text>
+            ) : (
+              <Text style={styles.compactXpBonusText}>+5 XP Bonus Earned</Text>
+            )}
+            <Text style={styles.compactTapHint}>Tap to expand</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <View style={styles.card}>
       {/* Header */}
-      <View style={styles.header}>
+      <TouchableOpacity 
+        style={styles.header} 
+        onPress={() => setIsExpanded(false)}
+        activeOpacity={0.7}
+      >
         <Zap size={12} color="#8B7CFF" />
         <Text style={styles.headerText}>NEO'S MISSION FOR TODAY</Text>
-        {allDone && <Text style={styles.allDoneText}>✓ COMPLETE</Text>}
-      </View>
+        {allDone ? (
+          <Text style={styles.allDoneText}>✓ COMPLETE</Text>
+        ) : (
+          <Text style={styles.collapseText}>Tap to collapse</Text>
+        )}
+      </TouchableOpacity>
 
       {/* Coach message */}
       <Text style={styles.coachSubtle}>Neo prepared this mission based on your profile.</Text>
@@ -217,6 +269,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#22C55E',
     letterSpacing: 1,
+  },
+  collapseText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'rgba(139,124,255,0.6)',
   },
   coachMsg: {
     fontSize: 13,
@@ -362,5 +419,55 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     textAlign: 'center',
+  },
+
+  // COMPACT/COLLAPSED STATE STYLES
+  compactCard: {
+    marginHorizontal: 18,
+    marginTop: 12,
+    backgroundColor: '#131929',
+    borderRadius: 24,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(139,124,255,0.2)',
+  },
+  compactMainRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  compactLeftColumn: {
+    gap: 3,
+  },
+  compactRightColumn: {
+    alignItems: 'flex-end',
+    gap: 3,
+  },
+  compactHeaderText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#8B7CFF',
+    letterSpacing: 1.2,
+  },
+  compactProgressValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#F7F8FC',
+  },
+  compactXpText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#F7C873',
+  },
+  compactXpBonusText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#22C55E',
+  },
+  compactTapHint: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: 'rgba(139,124,255,0.5)',
+    fontStyle: 'italic',
   },
 });

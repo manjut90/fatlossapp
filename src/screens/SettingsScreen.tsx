@@ -89,7 +89,7 @@ import React,{useState} from 'react';
          </Card> 
  
          <Card title="Notifications" icon={<Bell size={16} color="#8B7CFF"/>}> 
-           <Toggle label="Push Notifications" sub={notifs?'Notifications are on':'Notifications are off'} value={notifs} onChange={async(v)=>{ 
+           <Toggle label="Push Notifications" sub={notifs?'Notifications are on':'Notifications are off'} value={notifs} onChange={async(v: boolean)=>{ 
              if (Platform.OS !== 'android') {
                Alert.alert('Not Supported', 'Push notifications are not supported on iOS.');
                return;

@@ -4,15 +4,7 @@ import { radii } from './radii';
 import { typography } from './typography';
 import { shadows } from './shadows';
 
-export type AppTheme = {
-  darkMode: boolean;
-  colors: typeof DARK_COLORS;
-  surface: string;
-  background: string;
-  text: string;
-  primary: string;
-  border: string;
-};
+// AppTheme will be defined below darkTheme
 
 const baseTheme = {
   spacing,
@@ -48,3 +40,5 @@ export const lightTheme = {
   primary: LIGHT_COLORS.primary,
   border: LIGHT_COLORS.border,
 };
+
+export type AppTheme = typeof darkTheme;

@@ -161,7 +161,6 @@ export default function CheckInScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
               <View style={{
                 width: 40, height: 40, borderRadius: 20,
-                background: 'linear-gradient(135deg, #C68BFF, #8B7CFF)',
                 backgroundColor: '#8B7CFF',
                 alignItems: 'center', justifyContent: 'center',
               }}>

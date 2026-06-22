@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Image, StatusBar, ScrollView, Share, Modal, TextInput,
-  KeyboardAvoidingView, Platform, Dimensions, Animated, Alert
+  KeyboardAvoidingView, Platform, Dimensions, Animated, Alert, RefreshControl
 } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +16,7 @@ import ReelViewerModal from '../components/profile/ReelViewerModal';
 import { ENABLE_REELS } from '../constants/featureFlags';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import RefreshableScrollView from '../components/RefreshableScrollView';
 import { decode } from 'base64-arraybuffer';
 import { getLevelFromXP } from '../constants/levels';
 import { achievementOrchestrator } from './gamification/services/AchievementOrchestrator';
@@ -125,7 +126,14 @@ const StoryViewerModal = ({ stories, visible, onClose }: { stories: any[], visib
         </View>
 
         <View style={styles.storyModalHeader}>
-          <Image source={{ uri: activeStory.profiles?.avatar_url || 'https://i.pravatar.cc/150' }} style={styles.storyModalAvatar} />
+          <Image 
+            source={{ 
+              uri: activeStory.profiles?.avatar_url 
+                ? `${activeStory.profiles.avatar_url}?t=${activeStory.profiles.updated_at ? new Date(activeStory.profiles.updated_at).getTime() : Date.now()}` 
+                : 'https://i.pravatar.cc/150' 
+            }} 
+            style={styles.storyModalAvatar} 
+          />
           <View style={{ flex: 1 }}>
             <Text style={styles.storyModalUsername}>{activeStory.profiles?.full_name || activeStory.profiles?.username || 'Member'}</Text>
           </View>
@@ -582,10 +590,44 @@ export default function FeedScreen() {
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [reelViewerVisible, setReelViewerVisible] = useState(false);
   const [selectedReel, setSelectedReel] = useState<any>(null);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    console.log("Refresh triggered");
+    setRefreshing(true);
+    try {
+      await fetchFeedData();
+    } catch (e) {
+      console.error('[FeedScreen] Refresh failed:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Sync stories state with profile avatar updates
+  useEffect(() => {
+    if (profile && stories.length > 0) {
+      setStories(prevStories => 
+        prevStories.map(s => {
+          if (s.user_id === user?.id) {
+            return {
+              ...s,
+              profiles: {
+                ...s.profiles,
+                avatar_url: profile.avatar_url,
+                updated_at: profile.updated_at,
+              }
+            };
+          }
+          return s;
+        })
+      );
+    }
+  }, [profile?.avatar_url, profile?.updated_at]);
 
   // Animated tab indicator
   const tabIndicatorAnim = useRef(new Animated.Value(0)).current;
@@ -774,7 +816,7 @@ export default function FeedScreen() {
 
     if (filteredPosts.length === 0) {
       return (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        <RefreshableScrollView onRefresh={handleRefresh} contentContainerStyle={{ paddingBottom: 40 }}>
           <EmptyStateHero
             onCreatePost={() => navigation.navigate('CreatePost')}
             userXp={userXp}
@@ -782,7 +824,7 @@ export default function FeedScreen() {
           />
           <CommunityHighlights />
           <MotivationCards />
-        </ScrollView>
+        </RefreshableScrollView>
       );
     }
 
@@ -795,6 +837,15 @@ export default function FeedScreen() {
         renderItem={({ item }) => <PostCard post={item} onPress={() => openPost(item)} />}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ backgroundColor: '#0B1020', paddingTop: 8, paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#8B7CFF"
+            colors={['#8B7CFF']}
+            progressBackgroundColor="#1E1D33"
+          />
+        }
         ListFooterComponent={
           <View>
             {showCommunityHighlights && <CommunityHighlights />}
@@ -828,7 +879,7 @@ export default function FeedScreen() {
 
     if (filteredReels.length === 0) {
       return (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        <RefreshableScrollView onRefresh={handleRefresh} contentContainerStyle={{ paddingBottom: 40 }}>
           <EmptyStateHero
             onCreatePost={() => navigation.navigate('CreatePost')}
             userXp={userXp}
@@ -836,7 +887,7 @@ export default function FeedScreen() {
           />
           <CommunityHighlights />
           <MotivationCards />
-        </ScrollView>
+        </RefreshableScrollView>
       );
     }
 
@@ -848,6 +899,15 @@ export default function FeedScreen() {
         renderItem={({ item }) => <ReelGridItem post={item} onPress={() => openReel(item)} />}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ backgroundColor: '#0B1020', padding: 2, paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#8B7CFF"
+            colors={['#8B7CFF']}
+            progressBackgroundColor="#1E1D33"
+          />
+        }
       />
     );
   };
@@ -904,7 +964,14 @@ export default function FeedScreen() {
           {/* Your Story */}
           <TouchableOpacity style={styles.storyContainer} onPress={handleAddStory}>
             <View style={styles.yourStoryAvatarWrap}>
-              <Image source={{ uri: user?.user_metadata?.avatar_url || 'https://i.pravatar.cc/150' }} style={styles.storyAvatar} />
+              <Image 
+                source={{ 
+                  uri: profile?.avatar_url 
+                    ? `${profile.avatar_url}?t=${profile.updated_at ? new Date(profile.updated_at).getTime() : Date.now()}` 
+                    : 'https://i.pravatar.cc/150' 
+                }} 
+                style={styles.storyAvatar} 
+              />
               <View style={styles.yourStoryPlus}>
                 <Plus size={12} color="#FFF" />
               </View>
@@ -921,7 +988,14 @@ export default function FeedScreen() {
                 <View style={styles.storyAvatarOuter}>
                   <LinearGradient colors={ringColors} style={styles.storyRingGradient}>
                     <View style={styles.storyRingInner}>
-                      <Image source={{ uri: story.profiles?.avatar_url || 'https://i.pravatar.cc/150' }} style={styles.storyAvatar} />
+                      <Image 
+                        source={{ 
+                          uri: story.profiles?.avatar_url 
+                            ? `${story.profiles.avatar_url}?t=${story.profiles.updated_at ? new Date(story.profiles.updated_at).getTime() : Date.now()}` 
+                            : 'https://i.pravatar.cc/150' 
+                        }} 
+                        style={styles.storyAvatar} 
+                      />
                     </View>
                   </LinearGradient>
                 </View>

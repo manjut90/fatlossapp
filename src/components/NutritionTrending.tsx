@@ -14,7 +14,7 @@ import { getUserTargets } from '../utils/healthCalculations';
 
 type TrendingMode = 'weekly' | 'comparison' | 'averages';
 
-export function NutritionTrending({ mode, setMode }) {
+export function NutritionTrending({ mode, setMode }: { mode: TrendingMode; setMode: (mode: TrendingMode) => void }) {
   const { dailyData } = useHistoricalData();
   const { profile } = useAuth();
 

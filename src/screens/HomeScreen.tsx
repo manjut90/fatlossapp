@@ -21,11 +21,12 @@ import {
   Text,
   Image,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Animated,
   Share,
 } from 'react-native';
+
+import RefreshableScrollView from '../components/RefreshableScrollView';
 
 import {
   useFocusEffect,
@@ -49,6 +50,7 @@ import {
   Utensils,
   TrendingUp,
   AlertTriangle,
+  Zap,
 } from 'lucide-react-native';
 
 import { useAuth } from '../context/AuthContext';
@@ -129,7 +131,11 @@ export default function HomeScreen() {
 
 
 
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
+
+  const handleRefresh = async () => {
+    await refreshHealthData?.();
+  };
   const targets = getUserTargets(profile);
   const currentWeight = parseFloat(profile?.current_weight || profile?.weight || '0') || 70;
   const userGoal = profile?.goal || profile?.goals?.[0] || 'fat_loss';
@@ -308,6 +314,8 @@ export default function HomeScreen() {
     },
   ];
 
+  const completedCheckinsCount = checkInItems.filter(item => item.completed).length;
+
   // ── PRIME STATE — personal health summary ──
   const getPrimeStateTitle = () => {
     const wins = [];
@@ -323,18 +331,38 @@ export default function HomeScreen() {
   };
 
   const getPrimeStateSummary = () => {
-    const { todayProtein, todayWater, todayWorkout } = healthData;
+    const { todayProtein, todayWater, todayWorkout, todaySleep, streak } = healthData;
+    const waterGoal = targets.watermL;
+    const proteinGoal = targets.protein;
 
+    if (streak >= 3) {
+      if (todayWater < waterGoal * 0.5) {
+        return `Streak is at ${streak} days. Hydration is currently the biggest risk at ${Math.round((todayWater / waterGoal) * 100)}%.`;
+      }
+      if (todaySleep > 0 && todaySleep < 6.5) {
+        return `Consistency is high with a ${streak}d streak. Recovery is the current bottleneck at ${todaySleep}h sleep.`;
+      }
+      return `Consistency is improving with a ${streak}-day streak. Keep pushing your daily score targets.`;
+    }
+
+    if (todayWorkout && todayWater < waterGoal * 0.7) {
+      return "Workout is complete. Hydration is now the primary priority to support recovery.";
+    }
     if (todayProtein > 0 && todayProtein < proteinGoal * 0.5) {
-      return "Protein critically low. Add 2 eggs or 100g chicken to your next meal.";
+      return `Logged protein is currently at ${Math.round(todayProtein)}g. Hydration and protein targets remain the biggest focus.`;
     }
-    if (todayWater < 1000) {
-      return "Under 1L water logged. Dehydration kills fat loss by 23%. Drink now.";
+    if (todaySleep > 0 && todaySleep < 6) {
+      return `Recovery is the limiting factor with only ${todaySleep}h sleep. Prioritize rest tonight.`;
     }
-    if (!todayWorkout) {
-      return "No workout logged yet. Even 20 mins raises metabolism for 14 hours.";
-    }
-    return "Log your meals and workout to unlock your personalised insight from Neo.";
+    return "Nothing to analyze yet. Complete one check-in and I'll start coaching.";
+  };
+
+  const getDailyScoreStatus = (score: number) => {
+    if (score <= 10) return 'Start your first check-in';
+    if (score <= 30) return 'Momentum is building';
+    if (score <= 60) return 'Strong progress today';
+    if (score <= 80) return 'Excellent consistency';
+    return 'Elite execution';
   };
 
   // XP progress toward next level (1000 XP per level)
@@ -389,6 +417,65 @@ export default function HomeScreen() {
     return 'On track';
   };
 
+  // ── NEO COMMAND CENTER DECISION ENGINE ──
+  const neoPriority = useMemo(() => {
+    const { todayProtein, todayWater, todayWorkout, todayCalories } = healthData;
+    const waterGoal = targets.watermL;
+    const proteinGoal = targets.protein;
+
+    // 1. Hydration
+    if (todayWater === 0) {
+      return {
+        priority: `Drink 750ml water before noon.`,
+        reason: `Hydration score is currently 0%.`,
+        impact: `Improves recovery and energy.`
+      };
+    } else if (todayWater < waterGoal) {
+      const remainingWater = Math.max(250, Math.round((waterGoal - todayWater) / 250) * 250);
+      return {
+        priority: `Drink ${remainingWater}ml water.`,
+        reason: `Hydration score is currently ${Math.round((todayWater / waterGoal) * 100)}%.`,
+        impact: `Improves metabolic rate and cellular recovery.`
+      };
+    }
+    // 2. Workout
+    if (!todayWorkout) {
+      return {
+        priority: `Log a 20-minute workout.`,
+        reason: `No physical activity is tracked yet for today.`,
+        impact: `Elevates metabolic rate for up to 14 hours.`
+      };
+    }
+    // 3. Protein
+    if (todayProtein === 0) {
+      return {
+        priority: `Log breakfast.`,
+        reason: `Protein target has not started.`,
+        impact: `Stay on track for ${Math.round(proteinGoal)}g protein.`
+      };
+    } else if (todayProtein < proteinGoal * 0.5) {
+      return {
+        priority: `Log a high-protein source.`,
+        reason: `Protein is currently at ${Math.round((todayProtein / proteinGoal) * 100)}%.`,
+        impact: `Preserves lean muscle and maintains fullness.`
+      };
+    }
+    // 4. Calories / General food
+    if (todayCalories === 0) {
+      return {
+        priority: `Log breakfast or next meal.`,
+        reason: `Nutrient intake tracking has not started.`,
+        impact: `Maintains calorie tracking goals.`
+      };
+    }
+    // 5. Daily Completion
+    return {
+      priority: `Maintain streak consistency.`,
+      reason: `All core metrics checked in today.`,
+      impact: `Unlocks next XP progression level.`
+    };
+  }, [healthData, targets]);
+
   return (
     <View style={styles.container}>
       <AchievementUnlockedModal
@@ -402,8 +489,8 @@ export default function HomeScreen() {
         style={StyleSheet.absoluteFillObject}
       />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
+      <RefreshableScrollView
+        onRefresh={handleRefresh}
         contentContainerStyle={{ paddingBottom: 90 }}
       >
         <Animated.View style={{ opacity: fadeAnim }}>
@@ -411,14 +498,14 @@ export default function HomeScreen() {
           {/* ══════════════════════════════
               HEADER
           ══════════════════════════════ */}
-          <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
+          <View style={[styles.header, { paddingTop: insets.top + 16, paddingBottom: 8 }]}>
             <View style={styles.headerContent}>
               {/* Left side: Avatar + Greeting */}
               <View style={styles.headerLeft}>
                 <View style={styles.avatar}>
                   <Image
                     source={require('../assets/neo_logo.png')}
-                    style={{ width: 52, height: 52, resizeMode: 'contain' }}
+                    style={{ width: 44, height: 44, resizeMode: 'contain' }}
                   />
                 </View>
                 <View>
@@ -427,320 +514,178 @@ export default function HomeScreen() {
                     <Text style={styles.friendText}>{firstName || 'there'}</Text>
                   </View>
                   <Text style={styles.subtitle}>
-                    <Text style={{ color: '#F7C873', fontWeight: '900', fontSize: 13, letterSpacing: 2 }}>EARN. </Text>
-                    <Text style={{ color: '#8B7CFF', fontWeight: '900', fontSize: 13, letterSpacing: 2 }}>RISE. </Text>
-                    <Text style={{ color: '#FF8FA3', fontWeight: '900', fontSize: 13, letterSpacing: 2 }}>ASCEND.</Text>
+                    <Text style={{ color: '#F7C873', fontWeight: '900', fontSize: 11, letterSpacing: 1.5 }}>EARN. </Text>
+                    <Text style={{ color: '#8B7CFF', fontWeight: '900', fontSize: 11, letterSpacing: 1.5 }}>RISE. </Text>
+                    <Text style={{ color: '#FF8FA3', fontWeight: '900', fontSize: 11, letterSpacing: 1.5 }}>ASCEND.</Text>
                   </Text>
                 </View>
               </View>
-
-              {/* Right side: Bell */}
               <View style={{ width: 28 }} />
             </View>
           </View>
 
-{/* DAILY MISSION */}
-<MissionCard />
+          {/* ══════════════════════════════
+              SECTION 1: DAILY SCORE (NEW HERO BLOCK)
+          ══════════════════════════════ */}
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreInfo}>
+              <Text style={styles.scoreLabel}>TODAY'S SCORE</Text>
+              <Text style={styles.scoreValueText}>{dailyScore} / 100</Text>
+              <Text style={styles.scoreStatus}>{getDailyScoreStatus(dailyScore)}</Text>
+            </View>
+            <View style={styles.scoreCircleContainer}>
+              <ProgressRing
+                progress={dailyScore}
+                color="#8B7CFF"
+                size={64}
+                strokeWidth={6}
+                completed={dailyScore >= 80}
+              >
+                {dailyScore === 0 && <Zap size={20} color="#8B7CFF" />}
+              </ProgressRing>
+            </View>
+          </View>
 
           {/* ══════════════════════════════
-              TODAY'S CHECK-INS
-              Original timeline layout with progress rings
+              SECTION 2: NEO COMMAND CENTER
+          ══════════════════════════════ */}
+          <View style={styles.commandCard}>
+            <View style={styles.commandHeader}>
+              <Sparkles size={12} color="#8B7CFF" />
+              <Text style={styles.commandHeaderText}>NEO COMMAND CENTER</Text>
+            </View>
+            <Text style={styles.commandPriorityText}>{neoPriority.priority}</Text>
+            <View style={styles.commandLine}>
+              <Text style={styles.commandLineLabel}>Reason:</Text>
+              <Text style={styles.commandLineValue}>{neoPriority.reason}</Text>
+            </View>
+            <View style={styles.commandLine}>
+              <Text style={styles.commandLineLabel}>Impact:</Text>
+              <Text style={styles.commandLineImpact}>{neoPriority.impact}</Text>
+            </View>
+          </View>
+
+          {/* ══════════════════════════════
+              SECTION 3: TODAY'S MISSIONS
+          ══════════════════════════════ */}
+          <MissionCard />
+
+          {/* ══════════════════════════════
+              SECTION 4: TODAY'S CHECK-INS
           ══════════════════════════════ */}
           <View style={styles.checkinCard}>
             <View style={styles.checkinHeader}>
               <View style={styles.checkinTitleWrap}>
-                <View style={{ width: 18, height: 18, alignItems: 'center', justifyContent: 'center', marginRight: 6 }}>
+                <View style={{ width: 14, height: 14, alignItems: 'center', justifyContent: 'center', marginRight: 6 }}>
                   <Animated.View style={{
                     position: 'absolute',
-                    width: 14,
-                    height: 14,
-                    borderRadius: 7,
+                    width: 12,
+                    height: 12,
+                    borderRadius: 6,
                     backgroundColor: '#8B7CFF',
                     opacity: checkInGlow.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.4] }),
-                    transform: [{ scale: checkInGlow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.25] }) }],
+                    transform: [{ scale: checkInGlow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] }) }],
                   }} />
-                  <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#8B7CFF' }} />
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#8B7CFF' }} />
                 </View>
                 <Text style={styles.checkinTitle}>TODAY'S CHECK-INS</Text>
               </View>
+              <Text style={styles.checkinProgressText}>
+                {completedCheckinsCount} / 4 Complete
+              </Text>
             </View>
 
-            {/* Timeline with rings */}
+            {/* Simpler Horizontal grid */}
             <View style={styles.timelineWrap}>
-              {checkInItems.map((item, index) => (
-                <React.Fragment key={item.type}>
-                  <View
-                    style={styles.timelineItem}
-                  >
+              {checkInItems.map((item) => {
+                const completed = item.completed;
+                const ringColor = completed ? item.ringColor : 'rgba(247,248,252,0.08)';
+                const bubbleColor = completed ? item.bubbleColor : 'rgba(247,248,252,0.03)';
+                const labelColor = completed ? '#F7F8FC' : '#6B7280';
+                const iconColor = completed ? item.icon.props.color : '#6B7280';
+
+                return (
+                  <View key={item.type} style={styles.timelineItem}>
                     {/* Progress ring around icon */}
                     <ProgressRing
-                      progress={item.progress}
-                      color={item.ringColor}
-                      size={50}
-                      strokeWidth={4}
-                      completed={item.completed}
+                      progress={completed ? item.progress : 0}
+                      color={ringColor}
+                      size={44}
+                      strokeWidth={3}
+                      completed={completed}
                     >
-                      <View style={[styles.timelineBubble, { backgroundColor: item.bubbleColor }]}>
-                        {item.icon}
+                      <View style={[styles.timelineBubble, { backgroundColor: bubbleColor, width: 32, height: 32, borderRadius: 16 }]}>
+                        {React.cloneElement(item.icon, { size: 15, color: iconColor })}
                       </View>
                     </ProgressRing>
 
-                    <Text style={styles.timelineLabel}>{item.label}</Text>
-
-                    {/* Glowing dot when complete, plain dot when pending */}
-                    {item.completed ? (
-                      <View style={[styles.completedDot, {
-                        backgroundColor: item.dotColor,
-                        shadowColor: item.dotColor,
-                      }]} />
-                    ) : (
-                      <View style={styles.pendingDot} />
-                    )}
+                    <Text style={[styles.timelineLabel, { color: labelColor }]}>{item.label}</Text>
                   </View>
-                  {index < checkInItems.length - 1 && (
-                    <View style={styles.timelineConnector} />
-                  )}
-                </React.Fragment>
-              ))}
+                );
+              })}
             </View>
           </View>
 
           {/* ══════════════════════════════
-              PRIME STATE — Personal Summary
+              SECTION 5: PROGRESS SNAPSHOT
           ══════════════════════════════ */}
-          <View style={styles.primeCard}>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={handleSharePress}
-              style={styles.shareFloating}
-            >
-              <Share2 size={14} color="#7C7C7C" strokeWidth={2.2} />
-            </TouchableOpacity>
-
-            <View style={styles.primeLeft}>
-              <View style={styles.primeTopRow}>
-                <View style={styles.primeTag}>
-                  <Sparkles size={12} color="#8B7CFF" />
-                  <Text style={styles.primeTagText}>YOUR SUMMARY</Text>
-                </View>
-                <View style={styles.weatherPill}>
-                  <CloudRain size={11} color="#88A1A8" />
-                  <Text style={styles.weatherText}>{temperature ?? '--'}°</Text>
-                </View>
-              </View>
-
-              <Text style={styles.primeTitle}>{getPrimeStateTitle()}</Text>
-              <Text style={styles.primeSub}>
-                {summaryLoading ? 'Neo is reviewing your data...' : aiSummary || getPrimeStateSummary()}
+          <TouchableOpacity
+            style={styles.snapshotCard}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Progress')}
+          >
+            <View style={styles.snapshotHeader}>
+              <Text style={styles.snapshotTitleText}>PROGRESS SNAPSHOT</Text>
+              <Text style={styles.snapshotStreakText}>
+                <Flame size={12} color="#FF8FA3" fill="#FF8FA3" /> {healthData.streak || 0} Day Streak
               </Text>
-
-              {/* Level + XP */}
-              <View style={styles.levelSection}>
-                <Text style={styles.levelText}>LEVEL {healthData.level || 1}</Text>
-                <Text style={styles.xpText}>{xpInCurrentLevel} / {xpNeededForLevel} XP</Text>
-                <View style={styles.levelTrack}>
-                  <LinearGradient
-                    colors={['#8B7CFF', '#FF8FA3']}
-                    style={[styles.levelFill, { width: `${xpProgress}%` }]}
-                  />
-                </View>
-                <Text style={styles.xpText}>{xpRemaining} XP to Level {(healthData.level || 1) + 1}</Text>
-              </View>
             </View>
-
-            <View style={styles.verticalDivider} />
-
-            {/* Right: Calories In vs Burned */}
-            <View style={styles.primeRight}>
-              <TouchableOpacity onPress={() => navigation.navigate('CheckIn', { screen: 'Food' })}>
-                <Metric
-                  icon={<Flame size={14} color="#F3A24B" />}
-                  title="CALORIES IN"
-                  value={`${healthData.todayCalories}`}
-                  sub={`${healthData.todayCalories} / ${caloriesGoal}`}
-                  color="#F3A24B"
-                  progress={Math.min(100, (healthData.todayCalories / caloriesGoal) * 100)}
-                  textColor='#F7F8FC'
-                  subColor='#6B7280'
+            <View style={styles.snapshotBarRow}>
+              <Text style={styles.snapshotLevelText}>LEVEL {levelInfo.level}</Text>
+              <View style={styles.snapshotTrack}>
+                <LinearGradient
+                  colors={['#8B7CFF', '#FF8FA3']}
+                  style={[styles.snapshotFill, { width: `${xpProgress}%` }]}
                 />
-              </TouchableOpacity>
-              <View style={styles.metricDivider} />
-              <TouchableOpacity onPress={() => navigation.navigate('CheckIn', { screen: 'Activity' })}>
-                <Metric
-                  icon={<TrendingUp size={14} color="#FF5F85" />}
-                  title="CAL BURNED"
-                  value={`${healthData.todayCaloriesBurned || 0}`}
-                  sub={healthData.todayWorkout ? 'From workout' : 'No workout yet'}
-                  color="#FF5F85"
-                  progress={Math.min(100, ((healthData.todayCaloriesBurned || 0) / 500) * 100)}
-                  textColor='#F7F8FC'
-                  subColor='#6B7280'
-                />
-              </TouchableOpacity>
+              </View>
+              <Text style={styles.snapshotXpText}>
+                {xpInCurrentLevel} / {xpNeededForLevel} XP
+              </Text>
             </View>
-          </View>
+            <Text style={styles.snapshotRemainingText}>
+              {xpRemaining} XP to Level {levelInfo.level + 1}
+            </Text>
+          </TouchableOpacity>
 
           {/* ══════════════════════════════
-              HEALTH OVERVIEW
+              SECTION 6: NEO INSIGHT
           ══════════════════════════════ */}
-          <View style={styles.healthOverview}>
-            <HealthMini
-              icon={<Droplets size={17} color="#4B9EFF" />}
-              title="HYDRATE"
-              value={`${((healthData.todayWater || 0) / 1000).toFixed(1)}L`}
-              sub={`${Math.min(100, Math.round(((healthData.todayWater || 0) / waterGoal) * 100))}%`}
-              color="#4B9EFF"
-            />
-            <HealthMini
-              icon={<MoonStar size={17} color="#8B6BFF" />}
-              title="RECOVER"
-              value={`${dailyScore}%`}
-              sub="Score"
-              color="#8B6BFF"
-            />
-            <HealthMini
-              icon={<Footprints size={17} color="#59A95D" />}
-              title="MOVE"
-              value={healthData.todayWorkout ? 'Done' : '--'}
-              sub={healthData.todayWorkout ? 'Tracked' : 'Pending'}
-              color="#59A95D"
-            />
-            <HealthMini
-              icon={<Bed size={17} color="#5A9CFF" />}
-              title="SLEEP"
-              value={`${healthData.todaySleep || 0}h`}
-              sub={healthData.todaySleep >= 7 ? 'Good' : healthData.todaySleep > 0 ? 'Low' : '--'}
-              color="#5A9CFF"
-            />
-            <HealthMini
-              icon={<Flame size={17} color="#FF922E" />}
-              title="STREAK"
-              value={`${healthData.streak || 0}`}
-              sub="days"
-              color="#FF922E"
-            />
-          </View>
-
-          {/* ══════════════════════════════
-              OPTIMIZE TODAY
-              Only shows when off track
-          ══════════════════════════════ */}
-          {isOffTrack && (
-            <View style={styles.optimizeCard}>
-              <View style={styles.optimizeLeft}>
-                <View style={styles.optimizeTop}>
-                  <AlertTriangle size={13} color="#F59E0B" />
-                  <Text style={styles.optimizeLabel}>OPTIMIZE TODAY</Text>
-                </View>
-                {optimizeItems.slice(0, 2).map((item, i) => (
-                  <View key={i} style={styles.optimizeItem}>
-                    <View style={styles.optimizeDot} />
-                    <Text style={styles.optimizeText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={handleImprovePress}
-                style={styles.optimizeButton}
-              >
-                <Text style={styles.optimizeButtonText}>Fix it</Text>
-              </TouchableOpacity>
+          <View style={styles.insightCard}>
+            <View style={styles.insightHeader}>
+              <Sparkles size={11} color="#FF8FA3" />
+              <Text style={styles.insightLabelText}>NEO INSIGHT</Text>
             </View>
-          )}
-
-          {/* ══════════════════════════════
-              MACROS BREAKDOWN
-              Protein + Carbs + Fats + Fiber
-              with progress bars
-          ══════════════════════════════ */}
-          <View style={styles.fuelCard}>
-            <View style={styles.fuelHeader}>
-              <View style={styles.fuelTitleWrap}>
-                <Leaf size={14} color="#5EA765" strokeWidth={2.2} />
-                <Text style={styles.fuelTitle}>MACROS BREAKDOWN</Text>
-              </View>
-            </View>
-
-            {[
-              { label: 'PROTEIN', value: healthData.todayProtein || 0, target: proteinGoal, unit: 'g', color: '#8B7CFF' },
-              { label: 'CARBS', value: healthData.todayCarbs || 0, target: carbsGoal, unit: 'g', color: '#4A90FF' },
-              { label: 'FATS', value: healthData.todayFats || 0, target: fatsGoal, unit: 'g', color: '#FF8C42' },
-              { label: 'FIBER', value: healthData.todayFiber || 0, target: fiberGoal, unit: 'g', color: '#5EA765' },
-            ].map((macro) => (
-              <View key={macro.label} style={styles.macroRow}>
-                <Text style={[styles.macroLabel, { color: macro.color }]}>{macro.label}</Text>
-                <View style={styles.macroBarWrap}>
-                  <View style={styles.macroBar}>
-                    <View style={[
-                      styles.macroFill,
-                      {
-                        width: `${Math.min(100, (macro.value / macro.target) * 100)}%`,
-                        backgroundColor: macro.color,
-                      },
-                    ]} />
-                  </View>
-                </View>
-                <Text style={styles.macroValue}>
-                  {Math.round(macro.value)}{macro.unit}
-                  <Text style={styles.macroTarget}>/{macro.target}{macro.unit}</Text>
-                </Text>
-                <Text style={[styles.macroStatus, { color: macro.color }]}>
-                  {getMacroStatus(macro.value, macro.target)}
-                </Text>
-              </View>
-            ))}
+            <Text style={styles.insightText} numberOfLines={2}>
+              {aiSummary || "Nothing to analyze yet. Complete one check-in and I'll start coaching."}
+            </Text>
           </View>
 
         </Animated.View>
-      </ScrollView>
+      </RefreshableScrollView>
       <LevelUpModal
         visible={!!pendingLevelUp}
         level={pendingLevelUp?.level ?? 1}
         title={pendingLevelUp?.title ?? ''}
         onClose={async () => {
-        try {
-          await updateLastCelebratedLevel(
-            pendingLevelUp?.level ?? 0
-          );
-        } finally {
-          clearPendingLevelUp();
-        }
-      }}
+          try {
+            await updateLastCelebratedLevel(
+              pendingLevelUp?.level ?? 0
+            );
+          } finally {
+            clearPendingLevelUp();
+          }
+        }}
       />
-    </View>
-  );
-}
-
-function Metric({ icon, title, value, sub, progress, color, textColor, subColor }: any) {
-  return (
-    <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        {icon}
-        <Text style={{ marginLeft: 7, color: '#666', fontSize: 9, fontWeight: '700' }}>
-          {title}
-        </Text>
-      </View>
-      <Text style={{ fontSize: 22, fontWeight: '800', color: textColor || '#1E1E1E', marginTop: 8 }}>
-        {value}
-      </Text>
-      <Text style={{ color: subColor || '#777', marginTop: 2, fontSize: 10 }}>{sub}</Text>
-      <View style={{ height: 5, backgroundColor: '#1A2235', borderRadius: 999, overflow: 'hidden', marginTop: 10 }}>
-        <View style={{ width: `${progress}%`, height: 5, backgroundColor: color }} />
-      </View>
-    </View>
-  );
-}
-
-function HealthMini({ icon, title, value, sub, color }: any) {
-  return (
-    <View style={styles.healthMiniCard}>
-      <View style={[styles.iconGlowWrap, { shadowColor: color, shadowOpacity: 0.3, shadowRadius: 10 }]}>
-        {icon}
-      </View>
-      <Text style={[styles.healthMiniLabel, { color }]}>{title}</Text>
-      <Text style={styles.healthMiniValue}>{value}</Text>
-      <Text style={styles.healthMiniSub}>{sub}</Text>
     </View>
   );
 }
@@ -748,8 +693,8 @@ function HealthMini({ icon, title, value, sub, color }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0B1020' },
   header: {
-    paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
     backgroundColor: '#0B1020',
   },
   headerContent: {
@@ -762,188 +707,251 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'transparent',
-    marginRight: 12,
-    position: 'relative',
-  },
-  brainIconWrapper: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#1A2235',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#0B1020',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 10,
   },
   greeting: {
     fontFamily: 'Epilogue-Bold',
-    fontSize: 20,
+    fontSize: 18,
     color: '#F7F8FC',
     fontWeight: '700',
   },
   friendText: {
     fontFamily: 'Epilogue-Bold',
-    fontSize: 22,
+    fontSize: 20,
     color: '#8B7CFF',
     fontWeight: '700',
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 12,
     color: '#6B7280',
-    marginTop: 6,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
+    marginTop: 4,
     fontWeight: '900',
   },
-  betterYou: {
+
+  // Daily Score Hero Block
+  scoreCard: {
+    marginHorizontal: 18,
+    marginTop: 10,
+    backgroundColor: '#131929',
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139,124,255,0.2)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  scoreInfo: {
+    flex: 1,
+  },
+  scoreLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'rgba(247,248,252,0.4)',
+    letterSpacing: 1.2,
+  },
+  scoreValueText: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#F7F8FC',
+    marginTop: 4,
+  },
+  scoreStatus: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#8B7CFF',
-    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  scoreCircleContainer: {
+    width: 70,
+    height: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  // CHECK-IN CARD
+  // Neo Command Center card
+  commandCard: {
+    marginHorizontal: 18,
+    marginTop: 12,
+    backgroundColor: '#131929',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: 'rgba(139,124,255,0.2)',
+    gap: 5,
+  },
+  commandHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  commandHeaderText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#8B7CFF',
+    letterSpacing: 1.2,
+  },
+  commandPriorityText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#F7F8FC',
+    marginBottom: 2,
+    lineHeight: 20,
+  },
+  commandLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  commandLineLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(247,248,252,0.4)',
+    width: 80,
+  },
+  commandLineValue: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F7F8FC',
+  },
+  commandLineImpact: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FF8FA3',
+  },
+
+  // Today's Checkins
   checkinCard: {
-    marginHorizontal: 18, marginTop: 18, backgroundColor: '#131929',
-    borderRadius: 24, paddingTop: 16, paddingBottom: 18, paddingHorizontal: 16,
-    borderWidth: 1, borderColor: 'rgba(139,124,255,0.2)',
+    marginHorizontal: 18,
+    marginTop: 12,
+    backgroundColor: '#131929',
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139,124,255,0.2)',
   },
   checkinHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
   },
   checkinTitleWrap: { flexDirection: 'row', alignItems: 'center' },
-  checkinIconMini: {
-    width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(139,124,255,0.1)',
-    justifyContent: 'center', alignItems: 'center', marginRight: 8,
+  checkinTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: '#8B7CFF' },
+  checkinProgressText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#8B7CFF',
+    letterSpacing: 0.5,
   },
-  liveDot: {
-    width: 6, height: 6, borderRadius: 3, backgroundColor: '#63BA63',
-    position: 'absolute', bottom: 0, right: 0,
-  },
-  checkinClock: { fontSize: 10, color: '#8B7CFF', fontWeight: '700' },
-  checkinTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5, color: '#8B7CFF' },
-
-  // TIMELINE with rings
   timelineWrap: {
-    flexDirection: 'row', alignItems: 'flex-start',
-  },
-  timelineConnector: {
-    flex: 1, height: 2, backgroundColor: 'rgba(139,124,255,0.3)', marginTop: 30,
-  },
-  timelineItem: { alignItems: 'center', width: 72 },
-  timelineBubble: {
-    width: 37, height: 37, 
-    borderRadius: 19, justifyContent: 'center', alignItems: 'center',
-  },
-  timelineLabel: { marginTop: 10, fontSize: 10, color: '#F7F8FC', fontWeight: '700' },
-  completedDot: {
-    width: 10, height: 10, borderRadius: 5, marginTop: 8,
-    shadowOpacity: 0.7, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
-    elevation: 4,
-  },
-  pendingDot: {
-    width: 10, height: 10, borderRadius: 5, marginTop: 8,
-    borderWidth: 2, borderColor: '#6B7280', backgroundColor: '#1A2235',
-  },
-
-  // PRIME CARD
-  primeCard: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    backgroundColor: '#131929',
-    borderRadius: 28,
-    padding: 20,
     flexDirection: 'row',
-    position: 'relative',
-    shadowColor: '#8B7CFF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
-    elevation: 5,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
   },
-  shareFloating: { position: 'absolute', right: 14, bottom: 14 },
-  primeLeft: { width: '55%' },
-  primeRight: { width: '31%' },
-  primeTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  primeTag: { flexDirection: 'row', alignItems: 'center' },
-  primeTagText: { marginLeft: 6, fontSize: 10, color: '#8B7CFF', fontWeight: '700' },
-  weatherPill: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A2235',
-    borderRadius: 30, paddingHorizontal: 8, paddingVertical: 5,
+  timelineItem: { alignItems: 'center', width: 68 },
+  timelineBubble: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  weatherText: { marginLeft: 4, color: '#6B7280', fontSize: 9 },
-  primeTitle: { fontSize: 20, fontWeight: '800', color: '#F7F8FC', marginTop: 22 },
-  primeSub: { marginTop: 4, color: '#6B7280', fontSize: 15, lineHeight: 24 },
-  levelSection: { marginTop: 30 },
-  levelText: { color: '#8B7CFF', fontWeight: '800', fontSize: 10 },
-  levelTrack: {
-    width: 130, height: 4, borderRadius: 999, backgroundColor: '#1A2235',
-    overflow: 'hidden', marginTop: 8,
-  },
-  levelFill: { height: 4, borderRadius: 999 },
-  xpText: { color: '#8B7CFF', fontWeight: '600', fontSize: 9, marginTop: 8 },
-  verticalDivider: { width: 1, backgroundColor: 'rgba(139,124,255,0.15)', marginHorizontal: 16 },
-  metricDivider: { height: 1, backgroundColor: 'rgba(139,124,255,0.15)', marginVertical: 16 },
+  timelineLabel: { marginTop: 8, fontSize: 10, fontWeight: '700' },
 
-  // HEALTH OVERVIEW
-  healthOverview: {
-    marginHorizontal: 18, marginTop: 16, backgroundColor: '#131929',
-    borderRadius: 28, paddingVertical: 16, paddingHorizontal: 6,
-    borderWidth: 1, borderColor: 'rgba(139,124,255,0.2)', flexDirection: 'row', justifyContent: 'space-between',
+  // Progress Snapshot card
+  snapshotCard: {
+    marginHorizontal: 18,
+    marginTop: 12,
+    backgroundColor: '#131929',
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139,124,255,0.2)',
+    gap: 10,
   },
-  healthMiniCard: { width: '19%', alignItems: 'center' },
-  iconGlowWrap: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: '#1A2235',
-    justifyContent: 'center', alignItems: 'center',
+  snapshotHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  healthMiniLabel: { marginTop: 8, fontSize: 8, fontWeight: '700' },
-  healthMiniValue: { marginTop: 8, fontSize: 17, fontWeight: '800', color: '#F7F8FC' },
-  healthMiniSub: { marginTop: 2, fontSize: 10, color: '#6B7280' },
+  snapshotTitleText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'rgba(247,248,252,0.4)',
+    letterSpacing: 1.2,
+  },
+  snapshotLevelText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#8B7CFF',
+  },
+  snapshotStreakText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FF8FA3',
+  },
+  snapshotBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 2,
+  },
+  snapshotTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#1A2235',
+    overflow: 'hidden',
+  },
+  snapshotFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  snapshotXpText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#F7F8FC',
+    minWidth: 70,
+    textAlign: 'right',
+  },
+  snapshotRemainingText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(247,248,252,0.4)',
+    marginTop: 2,
+  },
 
-  // OPTIMIZE TODAY
-  optimizeCard: {
-    marginHorizontal: 18, marginTop: 14, backgroundColor: '#131929',
-    borderRadius: 22, paddingVertical: 14, paddingHorizontal: 16,
-    borderWidth: 1, borderColor: 'rgba(247,200,115,0.3)', flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'space-between',
+  // Neo Insight card
+  insightCard: {
+    marginHorizontal: 18,
+    marginTop: 12,
+    backgroundColor: '#131929',
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 143, 163, 0.15)',
+    gap: 6,
   },
-  optimizeLeft: { flex: 1, paddingRight: 10 },
-  optimizeTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  optimizeLabel: { marginLeft: 6, fontSize: 10, fontWeight: '800', color: '#F7C873' },
-  optimizeItem: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 },
-  optimizeDot: {
-    width: 5, height: 5, borderRadius: 3, backgroundColor: '#F7C873',
-    marginTop: 5, marginRight: 7,
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  optimizeText: { flex: 1, fontSize: 12, lineHeight: 18, color: '#6B7280' },
-  optimizeButton: {
-    height: 36, paddingHorizontal: 14, borderRadius: 14,
-    backgroundColor: 'rgba(247,200,115,0.2)', justifyContent: 'center', alignItems: 'center',
+  insightLabelText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FF8FA3',
+    letterSpacing: 1.2,
   },
-  optimizeButtonText: { color: '#F7C873', fontWeight: '700', fontSize: 12 },
-
-  // MACROS BREAKDOWN
-  fuelCard: {
-    marginHorizontal: 18, marginTop: 12, backgroundColor: '#131929',
-    borderRadius: 22, paddingHorizontal: 16, paddingVertical: 14,
-    borderWidth: 1, borderColor: 'rgba(139,124,255,0.2)',
+  insightText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F7F8FC',
+    lineHeight: 17,
+    fontStyle: 'italic',
   },
-  fuelHeader: { marginBottom: 14 },
-  fuelTitleWrap: { flexDirection: 'row', alignItems: 'center' },
-  fuelTitle: { marginLeft: 7, fontSize: 10, fontWeight: '800', color: '#F7F8FC' },
-  macroRow: {
-    flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 6,
-  },
-  macroLabel: { fontSize: 9, fontWeight: '800', width: 52, letterSpacing: 0.5 },
-  macroBarWrap: { flex: 1 },
-  macroBar: { height: 7, backgroundColor: '#1A2235', borderRadius: 4, overflow: 'hidden' },
-  macroFill: { height: '100%', borderRadius: 4 },
-  macroValue: { fontSize: 11, fontWeight: '700', color: '#F7F8FC', width: 58, textAlign: 'right' },
-  macroTarget: { fontSize: 10, color: '#6B7280', fontWeight: '500' },
-  macroStatus: { fontSize: 9, fontWeight: '800', width: 44, textAlign: 'right' },
 });

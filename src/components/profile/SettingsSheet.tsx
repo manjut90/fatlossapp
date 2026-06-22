@@ -28,7 +28,7 @@ export default function SettingsSheet({
   visible,
   onClose,
 }: any) {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { signOut } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(true);

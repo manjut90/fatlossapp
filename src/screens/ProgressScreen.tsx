@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, StatusBar,
+  View, Text, StyleSheet, StatusBar,
   TouchableOpacity, Animated,
 } from 'react-native';
+
+import RefreshableScrollView from '../components/RefreshableScrollView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
   Zap, TrendingDown, TrendingUp, Flame, RefreshCw, 
   CheckCircle2, Award, Calendar, Sparkles, Activity, 
-  Target, Dumbbell, ShieldCheck, Heart, Info, Trophy
+  Target, Dumbbell, ShieldCheck, Heart, Info, Trophy,
+  Leaf
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
@@ -30,10 +33,14 @@ const MOTIVATIONAL_LINES = [
 
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const { healthData, refreshHealthData } = useHealth();
+  const { dailyData, currentWeight, firstWeightEntry, refresh: refreshHistorical } = useHistoricalData();
+
+  const handleRefresh = async () => {
+    await refreshHistorical?.();
+  };
   const metrics = useProgressMetrics();
-  const { dailyData, currentWeight, firstWeightEntry } = useHistoricalData();
 
   const [tagline] = useState(() => MOTIVATIONAL_LINES[new Date().getDay() % MOTIVATIONAL_LINES.length]);
   const [period, setPeriod] = useState<'weekly' | 'monthly' | 'overall'>('weekly');
@@ -52,6 +59,11 @@ export default function ProgressScreen() {
   const firstName = profile?.full_name?.split(' ')[0] || 'Champ';
   const goal = profile?.goal || profile?.goals?.[0] || 'fat_loss';
   const targets = getUserTargets(profile);
+  const caloriesGoal = targets.calories;
+  const proteinGoal = targets.protein;
+  const carbsGoal = targets.carbs;
+  const fatsGoal = targets.fats;
+  const fiberGoal = targets.fiber;
 
   // Weight setup
   const startWeight = parseFloat(profile?.initial_weight || '0')
@@ -229,11 +241,10 @@ export default function ProgressScreen() {
   }, [firstName, metrics, isLoss, weightDiffAbs, hasPeriodLogs, period]);
 
   return (
-    <>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" />
-      <ScrollView 
-        style={[styles.container, { paddingTop: insets.top }]} 
-        showsVerticalScrollIndicator={false} 
+      <RefreshableScrollView 
+        onRefresh={handleRefresh}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
         <Animated.View style={{ opacity: fadeAnim }}>
@@ -538,9 +549,61 @@ export default function ProgressScreen() {
             )}
           </View>
 
+          {/* SECTION 8 — NUTRITION & CALORIE ANALYSIS */}
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <Leaf size={16} color="#5EA765" strokeWidth={2.2} />
+              <Text style={styles.sectionTitle}>Daily Fuel & Nutrition Analytics</Text>
+            </View>
+            
+            {/* Calories In / Burned metrics */}
+            <View style={styles.caloriesRow}>
+              <View style={styles.calorieCol}>
+                <Text style={styles.calorieLabel}>CALORIES IN</Text>
+                <Text style={styles.calorieVal}>{healthData.todayCalories}</Text>
+                <Text style={styles.calorieSub}>{healthData.todayCalories} / {caloriesGoal} kcal</Text>
+              </View>
+              <View style={styles.calorieDivider} />
+              <View style={styles.calorieCol}>
+                <Text style={styles.calorieLabel}>CALORIES BURNED</Text>
+                <Text style={styles.calorieVal}>{healthData.todayCaloriesBurned || 0}</Text>
+                <Text style={styles.calorieSub}>{healthData.todayWorkout ? 'From workout' : 'No workout yet'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Macro Breakdown progress bars */}
+            {[
+              { label: 'PROTEIN', value: healthData.todayProtein || 0, target: proteinGoal, unit: 'g', color: '#8B7CFF' },
+              { label: 'CARBS', value: healthData.todayCarbs || 0, target: carbsGoal, unit: 'g', color: '#4A90FF' },
+              { label: 'FATS', value: healthData.todayFats || 0, target: fatsGoal, unit: 'g', color: '#FF8C42' },
+              { label: 'FIBER', value: healthData.todayFiber || 0, target: fiberGoal, unit: 'g', color: '#5EA765' },
+            ].map((macro) => (
+              <View key={macro.label} style={styles.macroRow}>
+                <Text style={[styles.macroLabel, { color: macro.color }]}>{macro.label}</Text>
+                <View style={styles.macroBarWrap}>
+                  <View style={styles.macroBar}>
+                    <View style={[
+                      styles.macroFill,
+                      {
+                        width: `${Math.min(100, (macro.value / macro.target) * 100)}%`,
+                        backgroundColor: macro.color,
+                      },
+                    ]} />
+                  </View>
+                </View>
+                <Text style={styles.macroValue}>
+                  {Math.round(macro.value)}{macro.unit}
+                  <Text style={styles.macroTarget}>/{macro.target}{macro.unit}</Text>
+                </Text>
+              </View>
+            ))}
+          </View>
+
         </Animated.View>
-      </ScrollView>
-    </>
+      </RefreshableScrollView>
+    </View>
   );
 }
 
@@ -894,5 +957,82 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#F7F8FC',
+  },
+  // NUTRITION & CALORIE ANALYSIS STYLES (transplanted from home)
+  caloriesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingHorizontal: 8,
+  },
+  calorieCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  calorieLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#6B7280',
+    letterSpacing: 0.5,
+  },
+  calorieVal: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#F7F8FC',
+    marginTop: 6,
+  },
+  calorieSub: {
+    fontSize: 10,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  calorieDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(139,124,255,0.15)',
+    marginHorizontal: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(139,124,255,0.12)',
+    marginVertical: 14,
+  },
+  macroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 6,
+    gap: 8,
+  },
+  macroLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    width: 52,
+    letterSpacing: 0.5,
+  },
+  macroBarWrap: {
+    flex: 1,
+  },
+  macroBar: {
+    height: 6,
+    backgroundColor: '#1A2235',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  macroFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  macroValue: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F7F8FC',
+    width: 58,
+    textAlign: 'right',
+  },
+  macroTarget: {
+    fontSize: 10,
+    color: '#6B7280',
+    fontWeight: '500',
   },
 });

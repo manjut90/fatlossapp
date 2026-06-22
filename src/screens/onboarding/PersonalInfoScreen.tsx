@@ -188,12 +188,12 @@ export default function PersonalInfoScreen({
   let recoveryScore = '--';
   if (bmi) {
     const bmiValue = Number(bmi);
-    recoveryScore = bmiValue < 18.5 ? 65
+    recoveryScore = String(bmiValue < 18.5 ? 65
       : bmiValue < 22 ? 92
       : bmiValue < 25 ? 85
       : bmiValue < 30 ? 68
       : bmiValue < 35 ? 50
-      : 35;
+      : 35);
   }
 
   /* FITNESS */

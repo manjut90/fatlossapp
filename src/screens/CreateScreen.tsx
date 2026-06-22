@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native';
 
 export default function CreateScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const [protein, setProtein] =
     useState('');
 

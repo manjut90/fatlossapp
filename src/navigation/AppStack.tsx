@@ -19,6 +19,8 @@ export default function AppStack() {
         <Stack.Navigator
           screenOptions={{
             headerShown: false,
+            gestureEnabled: true,
+            animation: 'slide_from_right',
           }}
         >
           <Stack.Screen name="Main" component={MainTabs} />
@@ -35,7 +37,6 @@ export default function AppStack() {
           <Stack.Screen
             name="Settings"
             component={SettingsScreen}
-            options={{ presentation: 'modal' }}
           />
           <Stack.Screen name="EditProfile" component={EditProfileScreen}/>
           <Stack.Screen name="FitnessGoals" component={FitnessGoalsScreen}/>

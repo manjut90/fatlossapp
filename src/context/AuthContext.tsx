@@ -33,9 +33,11 @@ export function AuthProvider({
   /* FETCH PROFILE */
 
   const fetchProfile =
-    async (userId: string) => {
+    async (userId: string, silent = false) => {
       try {
-        setProfileLoading(true);
+        if (!silent && !profile) {
+          setProfileLoading(true);
+        }
 
         const {
   data,
@@ -92,7 +94,8 @@ export function AuthProvider({
       if (!user?.id) return;
 
       await fetchProfile(
-        user.id
+        user.id,
+        true
       );
     };
 

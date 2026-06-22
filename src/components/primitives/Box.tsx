@@ -3,10 +3,13 @@
 import React from 'react';
 import { View, ViewProps } from 'react-native';
 import { useTheme } from '../../context/ThemeProvider';
-import { Spacing, Radii } from '../../theme';
+import { spacing, radii } from '../../theme';
+
+type Spacing = keyof typeof spacing;
+type Radii = keyof typeof radii;
 
 type BoxProps = ViewProps & {
-  backgroundColor?: keyof (typeof useTheme)['colors'];
+  backgroundColor?: keyof ReturnType<typeof useTheme>['colors'];
   padding?: Spacing;
   paddingHorizontal?: Spacing;
   paddingVertical?: Spacing;

@@ -48,17 +48,31 @@ function FeedStackScreen() {
   );
 }
 
-function CustomTabBar({ state, descriptors, navigation }) {
+interface CustomTabBarProps {
+  state: any;
+  descriptors: any;
+  navigation: any;
+  onTabChange?: (name: string) => void;
+}
+
+function CustomTabBar({ state, descriptors, navigation, onTabChange }: CustomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const activeRouteName = state.routes[state.index].name;
+
+  React.useEffect(() => {
+    if (onTabChange) {
+      onTabChange(activeRouteName);
+    }
+  }, [activeRouteName]);
 
   return (
     <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 30 }]}>
       <View style={styles.tabBar}>
-        {state.routes.map((route, index) => {
+        {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
           const label = route.name;
           const isFocused = state.index === index;
-          const Icon = screenIcons[route.name];
+          const Icon = (screenIcons as any)[route.name];
 
           const onPress = () => {
             const event = navigation.emit({
@@ -78,7 +92,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
               onPress={onPress}
               style={styles.tabItem}
               accessibilityRole="button"
-              accessibilityStates={isFocused ? ['selected'] : []}
+              accessibilityState={{ selected: isFocused }}
             >
               <Icon
                 size={24}
@@ -97,16 +111,17 @@ function CustomTabBar({ state, descriptors, navigation }) {
 }
 
 export default function MainTabs() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const [neoVisible, setNeoVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState('Home');
 
   return (
     <View style={{ flex: 1 }}>
       <Tab.Navigator
-        tabBar={props => <CustomTabBar {...props} />}
-        sceneContainerStyle={{ paddingBottom: 65 }}
+        tabBar={props => <CustomTabBar {...props} onTabChange={setActiveTab} />}
         screenOptions={{
           headerShown: false,
+          sceneStyle: { paddingBottom: 65 },
         }}
       >
         <Tab.Screen name="Home" component={HomeScreen} />
@@ -115,10 +130,12 @@ export default function MainTabs() {
         <Tab.Screen name="Neo" component={AICoachScreen} />
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>
-      <FloatingActionButton
-        onNeoPress={() => setNeoVisible(true)}
-        onMediaPress={() => navigation.navigate('CreatePost')}
-      />
+      {activeTab !== 'Profile' && (
+        <FloatingActionButton
+          onNeoPress={() => setNeoVisible(true)}
+          onMediaPress={() => navigation.navigate('CreatePost')}
+        />
+      )}
       <NeoMiniChat visible={neoVisible} onClose={() => setNeoVisible(false)} />
     </View>
   );

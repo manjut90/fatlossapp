@@ -3,13 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TouchableOpacity,
   Modal,
   Animated,
   Image,
+  ScrollView,
 } from 'react-native';
+
+import RefreshableScrollView from '../components/RefreshableScrollView';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -473,8 +475,8 @@ function generateWorkoutPlan(profile: any) {
 }
 
 export default function AICoachScreen() {
-  const navigation = useNavigation();
-  const { profile } = useAuth();
+  const navigation = useNavigation<any>();
+  const { profile, refreshProfile } = useAuth();
   const { healthData, refreshHealthData } = useHealth();
   const [yesterdayMissionCompleted, setYesterdayMissionCompleted] = useState(false);
   const [yesterdayWorkoutCompleted, setYesterdayWorkoutCompleted] = useState(false);
@@ -800,6 +802,13 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
     return 'all';
   };
 
+  const handleRefresh = async () => {
+    await Promise.all([
+      fetchAIMeals(true),
+      fetchAIWorkout(),
+    ]);
+  };
+
   useEffect(() => {
     if (mealsLoading) {
       Animated.loop(
@@ -1009,10 +1018,10 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
   return (
     <>
       <StatusBar barStyle="dark-content" />
-      <ScrollView
+      <RefreshableScrollView
+        onRefresh={handleRefresh}
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
       >
         {/* ================================================= */}
         {/* HERO CARD */}
@@ -1134,7 +1143,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
                 </View>
                 <Text style={styles.cardDescription}>{workoutToShow.description}</Text>
                 <View style={styles.exerciseList}>
-                  {workoutToShow.exercises.map((ex, index) => (
+                  {workoutToShow.exercises.map((ex: any, index: number) => (
                     <View key={index} style={styles.exerciseRow}>
                       <Text style={styles.exerciseName}>{ex.name}</Text>
                       <Text style={styles.exerciseDetails}>{`${ex.sets}x${ex.reps}`}</Text>
@@ -1397,7 +1406,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
 
                   <Text style={styles.recipeSectionHeading}>INGREDIENTS</Text>
                   {recipeModal.meal.recipe.ingredients.map(
-                    (ingredient, index) => (
+                    (ingredient: string, index: number) => (
                       <Text key={index} style={styles.recipeIngredient}>
                         • {ingredient}
                       </Text>
@@ -1407,7 +1416,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
                   <View style={styles.recipeDivider} />
 
                   <Text style={styles.recipeSectionHeading}>METHOD</Text>
-                  {recipeModal.meal.recipe.steps.map((step, index) => (
+                  {recipeModal.meal.recipe.steps.map((step: string, index: number) => (
                     <Text key={index} style={styles.recipeStep}>
                       {index + 1}. {step}
                     </Text>
@@ -1426,7 +1435,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no explanation.
             </TouchableOpacity>
           </Modal>
         )}
-      </ScrollView>
+      </RefreshableScrollView>
     </>
   );
 }
@@ -1605,7 +1614,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 14,
     gap: 8,
-    transition: 'background-color 0.3s ease',
   },
   checkedInButton: {
     backgroundColor: 'rgba(139,124,255,0.5)',

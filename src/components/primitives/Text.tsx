@@ -5,8 +5,8 @@ import { Text as RNText, TextProps as RNTextProps, StyleSheet } from 'react-nati
 import { useTheme } from '../../context/ThemeProvider';
 
 type TextProps = RNTextProps & {
-  color?: keyof (typeof useTheme)['colors'];
-  variant?: keyof (typeof useTheme)['textVariants']; // We will define this later
+  color?: keyof ReturnType<typeof useTheme>['colors'];
+  variant?: keyof ReturnType<typeof useTheme>['textVariants']; // We will define this later
 };
 
 const Text: React.FC<TextProps> = ({
